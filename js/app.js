@@ -5,13 +5,13 @@ const LN=[['Hi-hat',9,1,1],['Crash',10,1,1],['Ride',8,1,1],['Tom',7,0,0],['Snare
 const TUN={g:{o:[-8,-3,2,7,11,16]},b:{o:[-20,-15,-10,-5]}};
 const HINT={mel:'Tap the staff to place a note at the chosen length. Tap a note again to remove it.',pia:'Tap either staff. Notes of the same length at the same spot stack into chords.',drm:'Tap circles to place hits. Use ‹ › or tap a measure above to switch measures.'};
 const TH={c:'Type a chord, then tap where it starts. Tap the same spot with the same chord to remove it.',d:'Draw with Apple Pencil. Fingers still scroll the page.',e:'Tap a pen mark to erase it.',r:'Tap to place a rest at the chosen length.'};
-const fresh=()=>({title:'Untitled',author:'',mode:'mel',cur:0,n:4,d:4,acc:0,tool:'n',cv:'C',z:0,tab:'',kit:[0,4,6],D:{mel:[[]],pia:[[],[]],drm:[[]]},ch:{},ink:{}});
+const fresh=()=>({title:'Untitled',author:'',mode:'mel',cur:0,n:4,d:4,acc:0,tool:'n',dinput:'grid',cv:'C',z:0,tab:'',kit:[0,4,6],D:{mel:[[]],pia:[[],[]],drm:[[]]},ch:{},ink:{}});
 let S,G={},hist=[],DL=null;
 try{S=JSON.parse(localStorage.getItem('ns1'))}catch(e){}
 if(!S||!S.D)S=fresh();
 if(S.mode=='cho')S.mode='mel';delete S.D.cho;
 if(!S.kit){S.kit=[0,4,6];(S.D.drm[0]||[]).forEach(m=>m.forEach(e=>e[2]=[0,4,6][e[2]]))}
-S.ch=S.ch||{};S.ink=S.ink||{};S.tab=S.tab||'';S.z=S.z||0;
+S.ch=S.ch||{};S.ink=S.ink||{};S.tab=S.tab||'';S.z=S.z||0;S.dinput=S.dinput||'grid';
 for(const k in S.ch)if(typeof S.ch[k]=='string'){(S.ch.mel=S.ch.mel||{})[k]=S.ch[k];delete S.ch[k]}
 const cc=()=>S.ch[S.mode]||(S.ch[S.mode]={}),INK=()=>S.ink[S.mode]||(S.ink[S.mode]=[]);
 const semi=(n,a)=>[0,2,4,5,7,9,11][((n%7)+7)%7]+(a||0)+12*Math.floor(n/7);
@@ -43,13 +43,24 @@ function rest(x,y0,d){return d==16?`<rect x="${x}" y="${y0+10}" width="14" heigh
  d==4?`<path d="M${x+2} ${y0+9}l8 8-8 8 8 8" stroke="#111" stroke-width="2.4" fill="none"/>`:
  `<path d="M${x+9} ${y0+14}L${x+2} ${y0+30}" stroke="#111" stroke-width="1.6"/><circle cx="${x+9}" cy="${y0+14}" r="3"/>`+(d==1?`<circle cx="${x+7}" cy="${y0+22}" r="3"/>`:'')}
 
-function drums(ev,mx,y0,uw){let s='';const X=u=>mx+14+u*uw;
- ev.forEach(([u,,l])=>{const[,m,xh,up]=LN[l],x=X(u),y=y0+40-m*5;
-  if(m>=10)s+=ln(x-9,y,x+9,y);
-  s+=xh?ln(x-4.5,y-4.5,x+4.5,y+4.5,1.6)+ln(x-4.5,y+4.5,x+4.5,y-4.5,1.6):`<ellipse cx="${x}" cy="${y}" rx="6" ry="4.5" transform="rotate(-20 ${x} ${y})"/>`;
-  const sx=x+(up?5.5:-5.5);s+=ln(sx,y,sx,up?y0-34:y0+68,1.1)});
+function drums(ev,mx,y0,uw){let s='';const X=u=>mx+14+u*uw,durations={};
  [1,0].forEach(v=>{const us=[...new Set(ev.filter(e=>LN[e[2]][3]==v).map(e=>e[0]))].sort((a,b)=>a-b);
-  for(let bt=0;bt<4;bt++){const g=us.filter(u=>u>>2==bt);if(g.length>1){const ey=v?y0-34:y0+68,off=v?5.5:-5.5;s+=ln(X(g[0])+off,ey,X(g[g.length-1])+off,ey,3)}}});
+   for(let bt=0;bt<4;bt++){const g=us.filter(u=>u>>2==bt);g.forEach((u,i)=>durations[v+':'+u]=(g[i+1]??(bt+1)*4)-u)}});
+ ev.forEach(([u,,l])=>{const[,m,xh,up]=LN[l],x=X(u),y=y0+40-m*5,d=durations[up+':'+u];
+   if(m>=10)s+=ln(x-9,y,x+9,y);
+   s+=xh?ln(x-4.5,y-4.5,x+4.5,y+4.5,1.6)+ln(x-4.5,y+4.5,x+4.5,y-4.5,1.6):`<ellipse cx="${x}" cy="${y}" rx="6" ry="4.5" transform="rotate(-20 ${x} ${y})"/>`;
+   if(d==3)s+=`<circle cx="${x+10}" cy="${y-4}" r="1.8" fill="#111"/>`;
+   const sx=x+(up?5.5:-5.5);s+=ln(sx,y,sx,up?y0-34:y0+68,1.1)});
+ [1,0].forEach(v=>{const us=[...new Set(ev.filter(e=>LN[e[2]][3]==v).map(e=>e[0]))].sort((a,b)=>a-b);
+   for(let bt=0;bt<4;bt++){const g=us.filter(u=>u>>2==bt);if(!g.length)continue;
+    const ey=v?y0-34:y0+68,off=v?5.5:-5.5,ds=g.map((u,i)=>(g[i+1]??(bt+1)*4)-u);
+    if(g.length>1){s+=ln(X(g[0])+off,ey,X(g[g.length-1])+off,ey,3);
+      const linked=new Set();
+      for(let i=0;i<g.length-1;i++)if(g[i+1]===g[i]+1){const by=ey+(v?5:-5);s+=ln(X(g[i])+off,by,X(g[i+1])+off,by,3);linked.add(i);linked.add(i+1)}
+      ds.forEach((d,i)=>{if(d!=1||linked.has(i))return;const left=i==g.length-1||g[i+1]-g[i]>1,ex=X(g[i])+off+(left?-10:10),by=ey+(v?5:-5);s+=ln(left?ex:X(g[i])+off,by,left?X(g[i])+off:ex,by,3)})
+    }else{const sx=X(g[0])+off,count=ds[0]==1?2:ds[0]<4?1:0;
+      for(let i=1;i<=count;i++){const by=ey+(v?5:-5)*(i-1),ex=sx+(v?10:-10);s+=ln(v?sx:ex,by,v?ex:sx,by,3)}}
+   }});
  return s}
 
 function build(ex){
@@ -90,12 +101,12 @@ function ui(){
  $('#tabs').innerHTML=Object.entries(MODES).map(([k,v])=>`<button data-m="${k}" class="${S.mode==k?'on':''}">${v[0]}</button>`).join('');
  const dr=S.mode=='drm',md=S.tool=='n'||S.tool=='r';
  $('#pal').innerHTML=dr?'':DUR.map(([d,n])=>`<button data-d="${d}" class="${S.d==d&&md?'on':''}">${n}</button>`).join('')+[[0,'♮'],[1,'♯'],[-1,'♭']].map(([a,t])=>`<button data-a="${a}" class="${S.acc==a?'on':''}">${t}</button>`).join('');
- $('#tl').innerHTML=[['n','Notes'],...(dr?[]:[['r','Rest']]),['c','Chords'],['d','Pen'],['e','Erase pen']].map(([t,n])=>`<button data-t="${t}" class="${S.tool==t?'on':''}">${n}</button>`).join('')
+ $('#tl').innerHTML=(dr?`<button data-x="dinput-grid" class="${S.dinput=='grid'?'on':''}">Grid</button><button data-x="dinput-pen" class="${S.dinput=='pen'?'on':''}">Pen</button>${S.dinput=='pen'?`<button data-t="e" class="${S.tool=='e'?'on':''}">Erase pen</button>`:''}`:[['n','Notes'],['r','Rest'],['c','Chords'],['d','Pen'],['e','Erase pen']].filter(([t])=>t!='r'||!dr).map(([t,n])=>`<button data-t="${t}" class="${S.tool==t?'on':''}">${n}</button>`).join(''))
   +(S.tool=='c'?`<input id="chord" value="${esc(S.cv||'')}" placeholder="Chord" oninput="S.cv=this.value;sv()" style="max-width:110px;min-width:80px">`:'')
   +(S.mode=='mel'?`<button data-x="tab">Tab: ${{'':'off',g:'guitar',b:'bass'}[S.tab]}</button>`:'')
   +`<button data-x="zoom" class="${S.z?'on':''}">Zoom: ${S.z?'measure':'all'}</button>`;
  const ev=S.D.drm[0][S.cur]||[],free=LN.map((l,i)=>i).filter(i=>!S.kit.includes(i));
- $('#g').innerHTML=dr?`<div class="r" style="padding:0 0 6px"><span style="color:var(--mu);font-size:13px">Measure ${S.cur+1} of ${S.n}</span><button data-x="prev">‹</button><button data-x="next">›</button>`
+ $('#g').innerHTML=dr&&S.dinput=='grid'?`<div class="r" style="padding:0 0 6px"><span style="color:var(--mu);font-size:13px">Measure ${S.cur+1} of ${S.n}</span><button data-x="prev">‹</button><button data-x="next">›</button>`
   +(free.length?`<select id="ap">${free.map(i=>`<option value="${i}">${LN[i][0]}</option>`).join('')}</select><button data-x="addk">+ Add to kit</button>`:'')+'</div>'
   +S.kit.map(l=>`<div class="gr"><b>${LN[l][0]}<button data-k="${l}" style="min-height:0;padding:0 6px;background:none;color:var(--mu)">×</button></b>`+Array.from({length:16},(_,u)=>`<button class="c${u&&u%4==0?' q':''}${ev.some(q=>q[0]==u&&q[2]==l)?' on':''}" data-g="${l},${u}"></button>`).join('')+'</div>').join(''):'';
  msg(TH[S.tool]||HINT[S.mode])}
@@ -119,8 +130,12 @@ function tap(e){if(!$('#sc svg')||S.tool=='d')return;
  if(i>=0)ev.splice(i,1);
  else{ev=ev.filter(q=>!(q[0]<u+d&&u<q[0]+q[1])||(q[0]==u&&q[1]==d&&q[2]!=null&&n!=null));ev.push([u,d,n,S.acc]);S.D[S.mode][kk][l.mi]=ev}
  go()}
-$('#sc').addEventListener('pointerup',tap);
-let pen=null;const sc=$('#sc'),NS='http://www.w3.org/2000/svg';
+const sc=$('#sc'),NS='http://www.w3.org/2000/svg';
+let tapStart=null;
+sc.addEventListener('pointerdown',e=>{if(S.tool!='d')tapStart={id:e.pointerId,x:e.clientX,y:e.clientY}});
+sc.addEventListener('pointerup',e=>{const p=tapStart;tapStart=null;if(p&&p.id==e.pointerId&&Math.hypot(e.clientX-p.x,e.clientY-p.y)<10)tap(e)});
+sc.addEventListener('pointercancel',e=>{if(tapStart&&tapStart.id==e.pointerId)tapStart=null});
+let pen=null;
 sc.addEventListener('pointerdown',e=>{if(S.tool!='d'||e.pointerType=='touch'||!$('#sc svg'))return;const[x,y]=XY(e),l=LOC(x,y);if(!l)return;
  e.preventDefault();sc.setPointerCapture(e.pointerId);pen={m:l.mi,mx:l.mx,sy:l.sy,p:[[+(x-l.mx).toFixed(1),+(y-l.sy).toFixed(1)]],el:document.createElementNS(NS,'path')};
  for(const[k,v]of Object.entries({fill:'none',stroke:'#c0392b','stroke-width':2.2,'stroke-linecap':'round'}))pen.el.setAttribute(k,v);$('#sc svg').appendChild(pen.el)});
@@ -164,6 +179,8 @@ async function act(x){const fn=(S.title||'score').replace(/[^\w-]+/g,'_');
  else if(x=='prev'){S.cur=Math.max(0,S.cur-1);go()}
  else if(x=='next'){S.cur=Math.min(S.n-1,S.cur+1);go()}
  else if(x=='zoom'){S.z=S.z?0:1;go()}
+ else if(x=='dinput-grid'){S.dinput='grid';S.tool='n';go()}
+ else if(x=='dinput-pen'){S.dinput='pen';S.tool='d';go()}
  else if(x=='tab'){S.tab=S.tab==''?'g':S.tab=='g'?'b':'';go()}
  else if(x=='addk'){push();S.kit.push(+$('#ap').value);S.kit.sort((a,b)=>a-b);go()}
  else if(x=='png'){const c=await cv();c.toBlob(b=>out(fn+'.png',b))}
