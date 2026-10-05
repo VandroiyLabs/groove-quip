@@ -98,7 +98,7 @@ const mi_end=(si,per,cnt)=>(si+1)*per>=cnt;
 function draw(){$('#sc').innerHTML=build(false).s}
 
 function ui(){
- $('#sc').classList.toggle('draw-mode',S.tool=='d');
+ document.documentElement.classList.toggle('draw-mode',S.tool=='d');
  $('#tabs').innerHTML=Object.entries(MODES).map(([k,v])=>`<button data-m="${k}" class="${S.mode==k?'on':''}">${v[0]}</button>`).join('');
  const dr=S.mode=='drm',md=S.tool=='n'||S.tool=='r';
  $('#pal').innerHTML=dr?'':DUR.map(([d,n])=>`<button data-d="${d}" class="${S.d==d&&md?'on':''}">${n}</button>`).join('')+[[0,'♮'],[1,'♯'],[-1,'♭']].map(([a,t])=>`<button data-a="${a}" class="${S.acc==a?'on':''}">${t}</button>`).join('');
@@ -137,7 +137,8 @@ function tap(e){if(!$('#sc svg')||S.tool=='d')return;
 const sc=$('#sc'),NS='http://www.w3.org/2000/svg';
 let tapStart=null;
 sc.addEventListener('pointerdown',e=>{if(S.tool!='d')tapStart={id:e.pointerId,x:e.clientX,y:e.clientY}});
-sc.addEventListener('pointerup',e=>{const p=tapStart;tapStart=null;if(p&&p.id==e.pointerId&&Math.hypot(e.clientX-p.x,e.clientY-p.y)<10)tap(e)});
+sc.addEventListener('pointermove',e=>{if(tapStart&&tapStart.id==e.pointerId&&Math.hypot(e.clientX-tapStart.x,e.clientY-tapStart.y)>=10)tapStart.moved=true});
+sc.addEventListener('pointerup',e=>{const p=tapStart;tapStart=null;if(p&&!p.moved&&p.id==e.pointerId&&Math.hypot(e.clientX-p.x,e.clientY-p.y)<10)tap(e)});
 sc.addEventListener('pointercancel',e=>{if(tapStart&&tapStart.id==e.pointerId)tapStart=null});
 let pen=null;
 sc.addEventListener('pointerdown',e=>{if(S.tool!='d'||e.pointerType=='touch'||!$('#sc svg'))return;const[x,y]=XY(e),l=PLOC(x,y);if(!l)return;
@@ -145,6 +146,12 @@ sc.addEventListener('pointerdown',e=>{if(S.tool!='d'||e.pointerType=='touch'||!$
  for(const[k,v]of Object.entries({fill:'none',stroke:'#c0392b','stroke-width':2.2,'stroke-linecap':'round'}))pen.el.setAttribute(k,v);$('#sc svg').appendChild(pen.el)});
 sc.addEventListener('pointermove',e=>{if(!pen)return;const[x,y]=XY(e);pen.p.push([+(x-pen.mx).toFixed(1),+(y-pen.sy).toFixed(1)]);pen.el.setAttribute('d','M'+pen.p.map(q=>(pen.mx+q[0])+' '+(pen.sy+q[1])).join('L'))});
 sc.addEventListener('pointerup',()=>{if(!pen)return;const t=pen;pen=null;if(t.p.length<2)t.p.push([t.p[0][0]+.1,t.p[0][1]]);push();INK().push({m:t.m,p:t.p});go()});
+const touchPoints=new Map();let touchPanY=null;
+const averageTouchY=()=>[...touchPoints.values()].reduce((sum,y)=>sum+y,0)/touchPoints.size;
+document.addEventListener('pointerdown',e=>{if(S.tool!='d'||e.pointerType!='touch')return;touchPoints.set(e.pointerId,e.clientY);touchPanY=touchPoints.size>=2?averageTouchY():null});
+document.addEventListener('pointermove',e=>{if(S.tool!='d'||e.pointerType!='touch'||!touchPoints.has(e.pointerId))return;touchPoints.set(e.pointerId,e.clientY);if(touchPoints.size<2)return;const y=averageTouchY();if(touchPanY!==null)window.scrollBy(0,touchPanY-y);touchPanY=y});
+const endTouchPan=e=>{if(!touchPoints.has(e.pointerId))return;touchPoints.delete(e.pointerId);touchPanY=touchPoints.size>=2?averageTouchY():null};
+document.addEventListener('pointerup',endTouchPan);document.addEventListener('pointercancel',endTouchPan);
 addEventListener('resize',draw);
 
 document.addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;const D=b.dataset;
