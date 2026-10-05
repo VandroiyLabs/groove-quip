@@ -8,7 +8,10 @@ input{background:var(--pn);border:1px solid var(--bt);flex:1;min-width:110px}
 button.on{background:var(--ac);color:#fff}
 #sc{background:var(--panel);margin:4px 0;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
 #sc svg{display:block;width:100%;height:auto}
+#sc.draw-mode svg{touch-action:none}
 #g{padding:4px 12px}
+.drum-input-toggle{padding:0 0 8px}
+.drum-grid-nav{padding:0 0 6px}
 .gr{display:flex;align-items:center;gap:3px;margin:3px 0}
 .gr b{width:92px;font-weight:500;font-size:13px;color:var(--mu)}
 .c{flex:1;aspect-ratio:1;max-width:44px;border-radius:50%;border:2px solid var(--mu);background:none;padding:0;min-height:0}

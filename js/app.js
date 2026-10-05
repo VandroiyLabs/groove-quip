@@ -4,7 +4,7 @@ const DUR=[[16,'Whole'],[8,'Half'],[4,'Quarter'],[2,'Eighth'],[1,'16th']];
 const LN=[['Hi-hat',9,1,1],['Crash',10,1,1],['Ride',8,1,1],['Tom',7,0,0],['Snare',5,0,0],['Floor tom',3,0,0],['Kick',1,0,0]];
 const TUN={g:{o:[-8,-3,2,7,11,16]},b:{o:[-20,-15,-10,-5]}};
 const HINT={mel:'Tap the staff to place a note at the chosen length. Tap a note again to remove it.',pia:'Tap either staff. Notes of the same length at the same spot stack into chords.',drm:'Tap circles to place hits. Use ‹ › or tap a measure above to switch measures.'};
-const TH={c:'Type a chord, then tap where it starts. Tap the same spot with the same chord to remove it.',d:'Draw with Apple Pencil. Fingers still scroll the page.',e:'Tap a pen mark to erase it.',r:'Tap to place a rest at the chosen length.'};
+const TH={c:'Type a chord, then tap where it starts. Tap the same spot with the same chord to remove it.',d:'Draw with a stylus. To scroll while drawing, use a finger outside the score.',e:'Tap a pen mark to erase it.',r:'Tap to place a rest at the chosen length.'};
 const fresh=()=>({title:'Untitled',author:'',mode:'mel',cur:0,n:4,d:4,acc:0,tool:'n',dinput:'grid',cv:'C',z:0,tab:'',kit:[0,4,6],D:{mel:[[]],pia:[[],[]],drm:[[]]},ch:{},ink:{}});
 let S,G={},hist=[],DL=null;
 try{S=JSON.parse(localStorage.getItem('ns1'))}catch(e){}
@@ -98,17 +98,19 @@ const mi_end=(si,per,cnt)=>(si+1)*per>=cnt;
 function draw(){$('#sc').innerHTML=build(false).s}
 
 function ui(){
+ $('#sc').classList.toggle('draw-mode',S.tool=='d');
  $('#tabs').innerHTML=Object.entries(MODES).map(([k,v])=>`<button data-m="${k}" class="${S.mode==k?'on':''}">${v[0]}</button>`).join('');
  const dr=S.mode=='drm',md=S.tool=='n'||S.tool=='r';
  $('#pal').innerHTML=dr?'':DUR.map(([d,n])=>`<button data-d="${d}" class="${S.d==d&&md?'on':''}">${n}</button>`).join('')+[[0,'♮'],[1,'♯'],[-1,'♭']].map(([a,t])=>`<button data-a="${a}" class="${S.acc==a?'on':''}">${t}</button>`).join('');
- $('#tl').innerHTML=(dr?`<button data-x="dinput-grid" class="${S.dinput=='grid'?'on':''}">Grid</button><button data-x="dinput-pen" class="${S.dinput=='pen'?'on':''}">Pen</button>${S.dinput=='pen'?`<button data-t="e" class="${S.tool=='e'?'on':''}">Erase pen</button>`:''}`:[['n','Notes'],['r','Rest'],['c','Chords'],['d','Pen'],['e','Erase pen']].filter(([t])=>t!='r'||!dr).map(([t,n])=>`<button data-t="${t}" class="${S.tool==t?'on':''}">${n}</button>`).join(''))
+ $('#tl').innerHTML=(dr?(S.dinput=='pen'?`<button data-t="e" class="${S.tool=='e'?'on':''}">Erase pen</button>`:''):[['n','Notes'],['r','Rest'],['c','Chords'],['d','Pen'],['e','Erase pen']].map(([t,n])=>`<button data-t="${t}" class="${S.tool==t?'on':''}">${n}</button>`).join(''))
   +(S.tool=='c'?`<input id="chord" value="${esc(S.cv||'')}" placeholder="Chord" oninput="S.cv=this.value;sv()" style="max-width:110px;min-width:80px">`:'')
   +(S.mode=='mel'?`<button data-x="tab">Tab: ${{'':'off',g:'guitar',b:'bass'}[S.tab]}</button>`:'')
   +`<button data-x="zoom" class="${S.z?'on':''}">Zoom: ${S.z?'measure':'all'}</button>`;
  const ev=S.D.drm[0][S.cur]||[],free=LN.map((l,i)=>i).filter(i=>!S.kit.includes(i));
- $('#g').innerHTML=dr&&S.dinput=='grid'?`<div class="r" style="padding:0 0 6px"><span style="color:var(--mu);font-size:13px">Measure ${S.cur+1} of ${S.n}</span><button data-x="prev">‹</button><button data-x="next">›</button>`
-  +(free.length?`<select id="ap">${free.map(i=>`<option value="${i}">${LN[i][0]}</option>`).join('')}</select><button data-x="addk">+ Add to kit</button>`:'')+'</div>'
-  +S.kit.map(l=>`<div class="gr"><b>${LN[l][0]}<button data-k="${l}" style="min-height:0;padding:0 6px;background:none;color:var(--mu)">×</button></b>`+Array.from({length:16},(_,u)=>`<button class="c${u&&u%4==0?' q':''}${ev.some(q=>q[0]==u&&q[2]==l)?' on':''}" data-g="${l},${u}"></button>`).join('')+'</div>').join(''):'';
+ $('#g').innerHTML=dr?`<div class="r drum-input-toggle"><button data-x="dinput-grid" class="${S.dinput=='grid'?'on':''}">Grid</button><button data-x="dinput-pen" class="${S.dinput=='pen'?'on':''}">Pen</button></div>`
+  +(S.dinput=='grid'?`<div class="r drum-grid-nav" style="padding:0 0 6px"><span style="color:var(--mu);font-size:13px">Measure ${S.cur+1} of ${S.n}</span><button data-x="prev">‹</button><button data-x="next">›</button>`
+   +(free.length?`<select id="ap">${free.map(i=>`<option value="${i}">${LN[i][0]}</option>`).join('')}</select><button data-x="addk">+ Add to kit</button>`:'')+'</div>'
+   +S.kit.map(l=>`<div class="gr"><b>${LN[l][0]}<button data-k="${l}" style="min-height:0;padding:0 6px;background:none;color:var(--mu)">×</button></b>`+Array.from({length:16},(_,u)=>`<button class="c${u&&u%4==0?' q':''}${ev.some(q=>q[0]==u&&q[2]==l)?' on':''}" data-g="${l},${u}"></button>`).join('')+'</div>').join(''):''):'';
  msg(TH[S.tool]||HINT[S.mode])}
 
 const XY=e=>{const r=$('#sc svg').getBoundingClientRect(),k=G.W/r.width;return[(e.clientX-r.left)*k,(e.clientY-r.top)*k]};

@@ -16,6 +16,10 @@ function createApp() {
       this.id = id;
       this.dataset = {};
       this.listeners = {};
+      this.classes = new Set();
+      this.classList = {
+        toggle: (name, enabled) => enabled ? this.classes.add(name) : this.classes.delete(name)
+      };
       this.clientWidth = id === 'sc' ? 600 : 0;
       this.textContent = '';
       this._innerHTML = '';
@@ -28,6 +32,8 @@ function createApp() {
     dispatch(name, event) {
       for (const callback of this.listeners[name] || []) callback(event);
     }
+
+    setPointerCapture() {}
 
     set innerHTML(value) {
       this._innerHTML = value;
@@ -62,6 +68,10 @@ function createApp() {
   const sandbox = {
     document,
     window: {},
+    document: {
+      ...document,
+      createElementNS: () => ({setAttribute() {}})
+    },
     localStorage: {
       getItem: () => null,
       setItem() {}
@@ -106,6 +116,20 @@ test('canceled score gestures are ignored', () => {
   assert.equal(app.evaluate('S.D.mel[0][0].length'), 0);
 });
 
+test('pen mode records stylus strokes and disables browser panning on the score', () => {
+  const app = createApp();
+  app.evaluate("S.tool = 'd'; go()");
+  const score = app.elements.get('sc');
+
+  assert.equal(score.classes.has('draw-mode'), true);
+  score.dispatch('pointerdown', {pointerId: 1, pointerType: 'pen', clientX: 150, clientY: 150, preventDefault() {}});
+  score.dispatch('pointermove', {pointerId: 1, pointerType: 'pen', clientX: 170, clientY: 165});
+  score.dispatch('pointerup', {pointerId: 1, pointerType: 'pen', clientX: 170, clientY: 165});
+
+  assert.equal(app.evaluate('INK().length'), 1);
+  assert.match(fs.readFileSync(path.join(__dirname, '..', 'css', 'app.css'), 'utf8'), /#sc\.draw-mode svg\{touch-action:none\}/);
+});
+
 test('drum positions 1 and 4 render a dotted eighth followed by a sixteenth', () => {
   const app = createApp();
   const svg = app.evaluate('drums([[0, 1, 0], [3, 1, 0]], 0, 40, 15)');
@@ -121,14 +145,17 @@ test('drum sixteenths receive secondary beams while eighths remain single-beamed
   assert.equal((eighths.match(/stroke-width="3"/g) || []).length, 1);
 });
 
-test('drum input switches between the grid and pen tools', () => {
+test('drum input selector sits above the grid and switches between grid and pen', () => {
   const app = createApp();
   app.evaluate("S.mode = 'drm'; go()");
+  assert.doesNotMatch(app.elements.get('tabs').innerHTML, /dinput-/);
+  assert.match(app.elements.get('g').innerHTML, /^<div class="r drum-input-toggle">.*data-x="dinput-grid"[^>]*>Grid<\/button>.*data-x="dinput-pen"[^>]*>Pen<\/button>/);
 
   app.clickAction('dinput-pen');
   assert.equal(app.evaluate('S.dinput'), 'pen');
   assert.equal(app.evaluate('S.tool'), 'd');
-  assert.equal(app.elements.get('g').innerHTML, '');
+  assert.match(app.elements.get('g').innerHTML, /drum-input-toggle/);
+  assert.doesNotMatch(app.elements.get('g').innerHTML, /data-g=/);
 
   app.clickAction('dinput-grid');
   assert.equal(app.evaluate('S.dinput'), 'grid');
