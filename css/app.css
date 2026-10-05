@@ -19,6 +19,7 @@ button.on{background:var(--ac);color:#fff}
 .site-footer a{color:var(--ac);text-decoration:none}
 .site-footer a:hover{text-decoration:underline}
 .app-header{justify-content:space-between;align-items:center;gap:12px}
-.top-actions{padding-top:0;margin-left:auto;display:flex;flex-wrap:wrap;justify-content:flex-end;gap:8px}
+.top-actions{padding-top:0;margin-left:auto;display:flex;flex-wrap:wrap;justify-content:flex-end;gap:8px;width:100%}
+.footer-actions{justify-content:flex-end;gap:8px;padding:0 12px 8px}
 .action-link{display:inline-flex;align-items:center;justify-content:center;background:var(--bt);color:var(--tx);border-radius:8px;padding:10px 14px;min-height:44px;text-decoration:none;font:inherit}
 .action-link:hover{filter:brightness(1.08)}
