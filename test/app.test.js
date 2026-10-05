@@ -130,6 +130,19 @@ test('pen mode records stylus strokes and disables browser panning on the score'
   assert.match(fs.readFileSync(path.join(__dirname, '..', 'css', 'app.css'), 'utf8'), /#sc\.draw-mode svg\{touch-action:none\}/);
 });
 
+test('pen strokes may start in the space above the staff', () => {
+  const app = createApp();
+  app.evaluate("S.tool = 'd'; go()");
+  const score = app.elements.get('sc');
+
+  score.dispatch('pointerdown', {pointerId: 1, pointerType: 'pen', clientX: 150, clientY: 30, preventDefault() {}});
+  score.dispatch('pointermove', {pointerId: 1, pointerType: 'pen', clientX: 170, clientY: 45});
+  score.dispatch('pointerup', {pointerId: 1, pointerType: 'pen', clientX: 170, clientY: 45});
+
+  assert.equal(app.evaluate('INK().length'), 1);
+  assert.ok(app.evaluate('INK()[0].p[0][1] < 0'));
+});
+
 test('drum positions 1 and 4 render a dotted eighth followed by a sixteenth', () => {
   const app = createApp();
   const svg = app.evaluate('drums([[0, 1, 0], [3, 1, 0]], 0, 40, 15)');
@@ -161,4 +174,19 @@ test('drum input selector sits above the grid and switches between grid and pen'
   assert.equal(app.evaluate('S.dinput'), 'grid');
   assert.equal(app.evaluate('S.tool'), 'n');
   assert.match(app.elements.get('g').innerHTML, /data-g=/);
+});
+
+test('annotation visibility can be toggled without deleting stored strokes', () => {
+  const app = createApp();
+  app.evaluate("INK().push({m: 0, p: [[100, 20], [110, 25]]}); go()");
+  assert.match(app.evaluate('build(false).s'), /stroke="#c0392b"/);
+
+  app.clickAction('ink');
+  assert.equal(app.evaluate('S.showInk'), false);
+  assert.equal(app.evaluate('INK().length'), 1);
+  assert.doesNotMatch(app.evaluate('build(false).s'), /stroke="#c0392b"/);
+
+  app.clickAction('ink');
+  assert.equal(app.evaluate('S.showInk'), true);
+  assert.match(app.evaluate('build(false).s'), /stroke="#c0392b"/);
 });

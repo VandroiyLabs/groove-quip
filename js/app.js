@@ -5,13 +5,13 @@ const LN=[['Hi-hat',9,1,1],['Crash',10,1,1],['Ride',8,1,1],['Tom',7,0,0],['Snare
 const TUN={g:{o:[-8,-3,2,7,11,16]},b:{o:[-20,-15,-10,-5]}};
 const HINT={mel:'Tap the staff to place a note at the chosen length. Tap a note again to remove it.',pia:'Tap either staff. Notes of the same length at the same spot stack into chords.',drm:'Tap circles to place hits. Use ‹ › or tap a measure above to switch measures.'};
 const TH={c:'Type a chord, then tap where it starts. Tap the same spot with the same chord to remove it.',d:'Draw with a stylus. To scroll while drawing, use a finger outside the score.',e:'Tap a pen mark to erase it.',r:'Tap to place a rest at the chosen length.'};
-const fresh=()=>({title:'Untitled',author:'',mode:'mel',cur:0,n:4,d:4,acc:0,tool:'n',dinput:'grid',cv:'C',z:0,tab:'',kit:[0,4,6],D:{mel:[[]],pia:[[],[]],drm:[[]]},ch:{},ink:{}});
+const fresh=()=>({title:'Untitled',author:'',mode:'mel',cur:0,n:4,d:4,acc:0,tool:'n',dinput:'grid',showInk:true,cv:'C',z:0,tab:'',kit:[0,4,6],D:{mel:[[]],pia:[[],[]],drm:[[]]},ch:{},ink:{}});
 let S,G={},hist=[],DL=null;
 try{S=JSON.parse(localStorage.getItem('ns1'))}catch(e){}
 if(!S||!S.D)S=fresh();
 if(S.mode=='cho')S.mode='mel';delete S.D.cho;
 if(!S.kit){S.kit=[0,4,6];(S.D.drm[0]||[]).forEach(m=>m.forEach(e=>e[2]=[0,4,6][e[2]]))}
-S.ch=S.ch||{};S.ink=S.ink||{};S.tab=S.tab||'';S.z=S.z||0;S.dinput=S.dinput||'grid';
+S.ch=S.ch||{};S.ink=S.ink||{};S.tab=S.tab||'';S.z=S.z||0;S.dinput=S.dinput||'grid';S.showInk=S.showInk!==false;
 for(const k in S.ch)if(typeof S.ch[k]=='string'){(S.ch.mel=S.ch.mel||{})[k]=S.ch[k];delete S.ch[k]}
 const cc=()=>S.ch[S.mode]||(S.ch[S.mode]={}),INK=()=>S.ink[S.mode]||(S.ink[S.mode]=[]);
 const semi=(n,a)=>[0,2,4,5,7,9,11][((n%7)+7)%7]+(a||0)+12*Math.floor(n/7);
@@ -91,7 +91,7 @@ function build(ex){
   for(const key in ch){const[a,u]=key.split(':').map(Number),r=a-base;
    if(r>=0&&r<cnt&&Math.floor(r/per)==si)o+=`<text x="${80+(r%per)*mw+8+u*uw}" y="${Y(0)-28}" font-size="24" font-weight="700" font-family="'Comic Sans MS','Comic Neue','Chalkboard SE','Marker Felt',cursive">${esc(ch[key])}</text>`}
   if(ns>1)o+=ln(xe,Y(0),xe,Y(1)+40,mi_end(si,per,cnt)?3:1)}
- (S.ink[S.mode]||[]).forEach(st=>{const r=st.m-base;if(r<0||r>=cnt)return;const mx=80+(r%per)*mw,sy=hy+Math.floor(r/per)*sh;
+ if(S.showInk)(S.ink[S.mode]||[]).forEach(st=>{const r=st.m-base;if(r<0||r>=cnt)return;const mx=80+(r%per)*mw,sy=hy+Math.floor(r/per)*sh;
   o+=`<path d="M${st.p.map(q=>(mx+q[0]).toFixed(1)+' '+(sy+q[1]).toFixed(1)).join('L')}" fill="none" stroke="#c0392b" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>`});
  return{s:`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" ${ex?`width="${W}" height="${H}"`:''} font-family="'Noto Music','Apple Symbols','Segoe UI Symbol','Helvetica Neue',Arial,sans-serif">${o}</svg>`,W,H}}
 const mi_end=(si,per,cnt)=>(si+1)*per>=cnt;
@@ -105,7 +105,8 @@ function ui(){
  $('#tl').innerHTML=(dr?(S.dinput=='pen'?`<button data-t="e" class="${S.tool=='e'?'on':''}">Erase pen</button>`:''):[['n','Notes'],['r','Rest'],['c','Chords'],['d','Pen'],['e','Erase pen']].map(([t,n])=>`<button data-t="${t}" class="${S.tool==t?'on':''}">${n}</button>`).join(''))
   +(S.tool=='c'?`<input id="chord" value="${esc(S.cv||'')}" placeholder="Chord" oninput="S.cv=this.value;sv()" style="max-width:110px;min-width:80px">`:'')
   +(S.mode=='mel'?`<button data-x="tab">Tab: ${{'':'off',g:'guitar',b:'bass'}[S.tab]}</button>`:'')
-  +`<button data-x="zoom" class="${S.z?'on':''}">Zoom: ${S.z?'measure':'all'}</button>`;
+  +`<button data-x="zoom" class="${S.z?'on':''}">Zoom: ${S.z?'measure':'all'}</button>`
+  +`<button data-x="ink">${S.showInk?'Hide':'Show'} annotations</button>`;
  const ev=S.D.drm[0][S.cur]||[],free=LN.map((l,i)=>i).filter(i=>!S.kit.includes(i));
  $('#g').innerHTML=dr?`<div class="r drum-input-toggle"><button data-x="dinput-grid" class="${S.dinput=='grid'?'on':''}">Grid</button><button data-x="dinput-pen" class="${S.dinput=='pen'?'on':''}">Pen</button></div>`
   +(S.dinput=='grid'?`<div class="r drum-grid-nav" style="padding:0 0 6px"><span style="color:var(--mu);font-size:13px">Measure ${S.cur+1} of ${S.n}</span><button data-x="prev">‹</button><button data-x="next">›</button>`
@@ -115,6 +116,7 @@ function ui(){
 
 const XY=e=>{const r=$('#sc svg').getBoundingClientRect(),k=G.W/r.width;return[(e.clientX-r.left)*k,(e.clientY-r.top)*k]};
 const LOC=(x,y)=>{y-=G.hy;if(y<0||x<80)return;const si=Math.floor(y/G.sh),j=Math.floor((x-80)/G.mw),mi=G.base+si*G.per+j;if(si>=G.rows||j>=G.per||mi>=S.n)return;return{mi,yy:y-si*G.sh,mx:80+j*G.mw,sy:G.hy+si*G.sh}};
+const PLOC=(x,y)=>y<0?undefined:LOC(x,Math.max(y,G.hy));
 function tap(e){if(!$('#sc svg')||S.tool=='d')return;
  const[x,y]=XY(e);
  if(S.tool=='e'){const L=INK(),keep=L.filter(st=>{const r=st.m-G.base;if(r<0||r>=G.cnt)return true;const mx=80+(r%G.per)*G.mw,sy=G.hy+Math.floor(r/G.per)*G.sh;return!st.p.some(q=>Math.hypot(mx+q[0]-x,sy+q[1]-y)<14)});
@@ -138,7 +140,7 @@ sc.addEventListener('pointerdown',e=>{if(S.tool!='d')tapStart={id:e.pointerId,x:
 sc.addEventListener('pointerup',e=>{const p=tapStart;tapStart=null;if(p&&p.id==e.pointerId&&Math.hypot(e.clientX-p.x,e.clientY-p.y)<10)tap(e)});
 sc.addEventListener('pointercancel',e=>{if(tapStart&&tapStart.id==e.pointerId)tapStart=null});
 let pen=null;
-sc.addEventListener('pointerdown',e=>{if(S.tool!='d'||e.pointerType=='touch'||!$('#sc svg'))return;const[x,y]=XY(e),l=LOC(x,y);if(!l)return;
+sc.addEventListener('pointerdown',e=>{if(S.tool!='d'||e.pointerType=='touch'||!$('#sc svg'))return;const[x,y]=XY(e),l=PLOC(x,y);if(!l)return;
  e.preventDefault();sc.setPointerCapture(e.pointerId);pen={m:l.mi,mx:l.mx,sy:l.sy,p:[[+(x-l.mx).toFixed(1),+(y-l.sy).toFixed(1)]],el:document.createElementNS(NS,'path')};
  for(const[k,v]of Object.entries({fill:'none',stroke:'#c0392b','stroke-width':2.2,'stroke-linecap':'round'}))pen.el.setAttribute(k,v);$('#sc svg').appendChild(pen.el)});
 sc.addEventListener('pointermove',e=>{if(!pen)return;const[x,y]=XY(e);pen.p.push([+(x-pen.mx).toFixed(1),+(y-pen.sy).toFixed(1)]);pen.el.setAttribute('d','M'+pen.p.map(q=>(pen.mx+q[0])+' '+(pen.sy+q[1])).join('L'))});
@@ -181,6 +183,7 @@ async function act(x){const fn=(S.title||'score').replace(/[^\w-]+/g,'_');
  else if(x=='prev'){S.cur=Math.max(0,S.cur-1);go()}
  else if(x=='next'){S.cur=Math.min(S.n-1,S.cur+1);go()}
  else if(x=='zoom'){S.z=S.z?0:1;go()}
+ else if(x=='ink'){S.showInk=!S.showInk;go()}
  else if(x=='dinput-grid'){S.dinput='grid';S.tool='n';go()}
  else if(x=='dinput-pen'){S.dinput='pen';S.tool='d';go()}
  else if(x=='tab'){S.tab=S.tab==''?'g':S.tab=='g'?'b':'';go()}
