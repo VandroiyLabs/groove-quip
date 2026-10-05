@@ -1,4 +1,4 @@
-# Notation Sketchpad
+# Groove Quip
 
 An open-source, touch-first music notation editor that runs entirely in the browser. Built for fast note entry on an iPad with Apple Pencil.
 
@@ -10,6 +10,15 @@ An open-source, touch-first music notation editor that runs entirely in the brow
 python3 -m http.server 8000
 ```
 Then open http://localhost:8000.
+
+## Contributing and tests
+Read [`AGENTS.md`](AGENTS.md) before making changes. It contains the repository's contribution and verification requirements, including guidance for AI coding assistants.
+
+Run the test suite with:
+```
+npm test
+```
+Before submitting changes, ensure all tests pass. For JavaScript changes, also run `node --check js/app.js`; run `git diff --check` for all changes. Before pushing, run the app locally and verify the affected workflow in a browser.
 
 ## Deploy with GitHub Pages
 1. Push to the `main` branch.
