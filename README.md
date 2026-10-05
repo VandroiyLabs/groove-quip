@@ -25,4 +25,6 @@ Then open http://localhost:8000.
 Split `app.js` into modules, add tests, offline/installable (manifest + service worker), playback and MIDI export, share by link, tablature as its own input mode.
 
 ## License
-MIT – see `LICENSE`.
+This project repository is licensed under the GNU General Public License v3.0. See `LICENSE` for the full text.
+
+The uploaded app source originally came from an upstream project that lists an MIT license; this repository keeps the GPL-3.0 license for the repo as a whole unless otherwise noted.
