@@ -1,5 +1,6 @@
 # Repository Instructions
 
+- Before changing product behavior, read [`spec.md`](spec.md). Follow its decided requirements; do not implement deferred or non-priority items unless requested. If the spec, current behavior, and request conflict or leave an important decision open, ask for clarification before proceeding.
 - Before pushing any code change, run the app locally and exercise the affected workflow in a browser. This is a static app; from the repository root, use `python3 -m http.server 8000` and open `http://localhost:8000` (choose another free port if needed).
 - Before submitting or pushing, run `npm test` and ensure all tests pass.
 - Run focused checks for the changed code. For JavaScript changes, run `node --check js/app.js`; run `git diff --check` for all changes.
