@@ -1,0 +1,7 @@
+{
+  "name": "groove-quip",
+  "private": true,
+  "scripts": {
+    "test": "node --test"
+  }
+}
