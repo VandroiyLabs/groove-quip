@@ -18,3 +18,6 @@ button.on{background:var(--ac);color:#fff}
 .site-footer{padding:10px 16px 28px;color:var(--mu);font-size:13px;line-height:1.5}
 .site-footer a{color:var(--ac);text-decoration:none}
 .site-footer a:hover{text-decoration:underline}
+.top-actions{padding-top:0}
+.action-link{display:inline-flex;align-items:center;justify-content:center;background:var(--bt);color:var(--tx);border-radius:8px;padding:10px 14px;min-height:44px;text-decoration:none;font:inherit}
+.action-link:hover{filter:brightness(1.08)}
