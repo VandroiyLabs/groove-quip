@@ -15,3 +15,6 @@ button.on{background:var(--ac);color:#fff}
 .c.on{background:var(--tx);border-color:var(--tx)}
 .c.q{margin-left:6px}
 #h{color:var(--mu);font-size:13px;padding:6px 14px 24px}
+.site-footer{padding:10px 16px 28px;color:var(--mu);font-size:13px;line-height:1.5}
+.site-footer a{color:var(--ac);text-decoration:none}
+.site-footer a:hover{text-decoration:underline}
