@@ -1,0 +1,6 @@
+# Ignore uploaded archives and local editor artifacts
+*.zip
+*.tar
+*.gz
+*.tgz
+.DS_Store
