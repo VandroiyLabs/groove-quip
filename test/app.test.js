@@ -232,14 +232,18 @@ test('pen mode records stylus strokes and disables browser panning on the score'
 test('drum Pen mode records stylus strokes on the active pattern line', () => {
   const app = createApp();
   app.evaluate("S.mode = 'drm'; go()");
+  app.clickAction('pat-add');
   app.clickAction('dinput-pen');
   const score = app.elements.get('sc');
+  let prevented = false;
 
   assert.equal(app.elements.get('html').classes.has('draw-mode'), true);
-  score.dispatch('pointerdown', {pointerId: 1, pointerType: 'pen', clientX: 150, clientY: 150, preventDefault() {}});
-  score.dispatch('pointermove', {pointerId: 1, pointerType: 'pen', clientX: 170, clientY: 165});
-  score.dispatch('pointerup', {pointerId: 1, pointerType: 'pen', clientX: 170, clientY: 165});
+  score.dispatch('pointerdown', {pointerId: 1, pointerType: 'pen', clientX: 40, clientY: 230, preventDefault() {prevented = true}});
+  score.dispatch('pointermove', {pointerId: 1, pointerType: 'pen', clientX: 60, clientY: 232});
+  score.dispatch('pointerup', {pointerId: 1, pointerType: 'pen', clientX: 60, clientY: 232});
 
+  assert.equal(prevented, true);
+  assert.equal(app.evaluate('P().id'), 1);
   assert.equal(app.evaluate('INK().length'), 1);
   assert.equal(app.evaluate('INK()[0].m'), 0);
 });

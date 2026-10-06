@@ -154,7 +154,16 @@ function ui(){
 
 const XY=e=>{const r=$('#sc svg').getBoundingClientRect(),k=G.W/r.width/G.scale;return[(e.clientX-r.left)*k,(e.clientY-r.top)*k]};
 const LOC=(x,y)=>{const group=G.patterns.find(pattern=>y>=pattern.top&&y<pattern.top+pattern.rowHeight);if(!group||x<80||x>=G.W)return;const j=Math.floor((x-80)/group.mw);if(j<0||j>=group.count)return;return{patternId:group.id,group,mi:group.base+j,yy:y-group.top,mx:80+j*group.mw,sy:group.top}};
-const PLOC=(x,y)=>y<0?undefined:LOC(x,y<G.patterns[0].top?G.patterns[0].top:y);
+const PLOC=(x,y)=>{
+ if(x<0||x>=G.W||y<0)return;
+ const group=G.patterns.find(pattern=>y>=pattern.top&&y<pattern.top+pattern.rowHeight)||G.patterns.reduce((nearest,pattern)=>{
+  const distance=y<pattern.top?pattern.top-y:y-(pattern.top+pattern.rowHeight);
+  const nearestDistance=y<nearest.top?nearest.top-y:y-(nearest.top+nearest.rowHeight);
+  return distance<nearestDistance?pattern:nearest;
+ });
+ const j=Math.max(0,Math.min(group.count-1,Math.floor((Math.max(80,x)-80)/group.mw)));
+ return{patternId:group.id,group,mi:group.base+j,yy:y-group.top,mx:80+j*group.mw,sy:group.top};
+};
 function tap(e){if(!$('#sc svg')||S.tool=='d')return;
  const[x,y]=XY(e),l=LOC(x,y);if(!l)return;S.activePatternId=l.patternId;P().cur=l.mi;const{mx,yy,group}=l;
  if(S.tool=='e'){const L=INK(),keep=L.filter(st=>!st.p.some(q=>Math.hypot(80+(st.m-group.base)*group.mw+q[0]-x,group.top+q[1]-y)<14));
@@ -178,8 +187,8 @@ sc.addEventListener('pointermove',e=>{if(tapStart&&tapStart.id==e.pointerId&&Mat
 sc.addEventListener('pointerup',e=>{const p=tapStart;tapStart=null;if(p&&!p.moved&&p.id==e.pointerId&&Math.hypot(e.clientX-p.x,e.clientY-p.y)<10)tap(e)});
 sc.addEventListener('pointercancel',e=>{if(tapStart&&tapStart.id==e.pointerId)tapStart=null});
 let pen=null;
-sc.addEventListener('pointerdown',e=>{if(S.tool!='d'||e.pointerType=='touch'||!$('#sc svg'))return;const[x,y]=XY(e),l=PLOC(x,y);if(!l)return;
- e.preventDefault();S.activePatternId=l.patternId;P().cur=l.mi;sc.setPointerCapture(e.pointerId);pen={patternId:l.patternId,m:l.mi,mx:l.mx,sy:l.sy,p:[[+(x-l.mx).toFixed(1),+(y-l.sy).toFixed(1)]],el:document.createElementNS(NS,'path')};
+sc.addEventListener('pointerdown',e=>{if(S.tool!='d'||e.pointerType=='touch'||!$('#sc svg'))return;e.preventDefault();const[x,y]=XY(e),l=PLOC(x,y);if(!l)return;
+ S.activePatternId=l.patternId;P().cur=l.mi;sc.setPointerCapture(e.pointerId);pen={patternId:l.patternId,m:l.mi,mx:l.mx,sy:l.sy,p:[[+(x-l.mx).toFixed(1),+(y-l.sy).toFixed(1)]],el:document.createElementNS(NS,'path')};
  for(const[k,v]of Object.entries({fill:'none',stroke:'#c0392b','stroke-width':2.2,'stroke-linecap':'round'}))pen.el.setAttribute(k,v);$(`#pattern-content-${l.patternId}`).appendChild(pen.el)});
 sc.addEventListener('pointermove',e=>{if(!pen)return;const[x,y]=XY(e);pen.p.push([+(x-pen.mx).toFixed(1),+(y-pen.sy).toFixed(1)]);pen.el.setAttribute('d','M'+pen.p.map(q=>(pen.mx+q[0])+' '+(pen.sy+q[1])).join('L'))});
 sc.addEventListener('pointerup',()=>{if(!pen)return;const t=pen;pen=null;if(t.p.length<2)t.p.push([t.p[0][0]+.1,t.p[0][1]]);push();const pattern=S.patterns.find(item=>item.id===t.patternId);(pattern.ink[S.mode]||(pattern.ink[S.mode]=[])).push({m:t.m,p:t.p});go()});
