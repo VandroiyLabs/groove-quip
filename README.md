@@ -1,5 +1,12 @@
 # Groove Quip
 
+[![License](https://img.shields.io/github/license/VandroiyLabs/groove-quip?label=license)](LICENSE)
+[![GitHub stars](https://img.shields.io/github/stars/VandroiyLabs/groove-quip?style=flat-square)](https://github.com/VandroiyLabs/groove-quip/stargazers)
+[![Deploy to GitHub Pages](https://img.shields.io/github/actions/workflow/status/VandroiyLabs/groove-quip/pages.yml?branch=main&style=flat-square)](https://github.com/VandroiyLabs/groove-quip/actions/workflows/pages.yml)
+[![GitHub issues](https://img.shields.io/github/issues/VandroiyLabs/groove-quip?style=flat-square)](https://github.com/VandroiyLabs/groove-quip/issues)
+
+[**Open the app now!**](https://vandroiylabs.github.io/groove-quip/)
+
 An open-source, touch-first music notation editor that runs entirely in the browser. Built for fast note entry on an iPad with Apple Pencil.
 
 **Modes:** melody, piano (grand staff), drums (tap grid with an extensible kit).
