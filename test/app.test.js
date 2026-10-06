@@ -10,6 +10,7 @@ function createApp(storedState = null) {
   const elements = new Map();
   const documentListeners = {};
   const documentCaptureListeners = {};
+  const documentListenerOptions = {};
   let drawCount = 0;
   let scrollY = 1000;
 
@@ -71,6 +72,7 @@ function createApp(storedState = null) {
     addEventListener(name, callback, options) {
       const listeners = options === true || options?.capture ? documentCaptureListeners : documentListeners;
       listeners[name] = callback;
+      documentListenerOptions[name] = options;
     },
     documentElement: elements.get('html'),
     createElementNS: () => ({setAttribute() {}})
@@ -102,6 +104,7 @@ function createApp(storedState = null) {
       documentCaptureListeners[name]?.(event);
       documentListeners[name]?.(event);
     },
+    documentListenerOptions(name) { return documentListenerOptions[name]; },
     clickAction(action) {
       documentListeners.click({target: {closest: () => ({dataset: {x: action}})}});
     }
@@ -277,6 +280,8 @@ test('Pen mode prevents native touch scrolling when touch-action is ignored', ()
   app.evaluate("S.tool = 'd'; go()");
   let prevented = false;
 
+  assert.equal(app.documentListenerOptions('touchmove')?.capture, true);
+  assert.equal(app.documentListenerOptions('touchmove')?.passive, false);
   app.dispatchDocument('touchmove', {cancelable: true, preventDefault() {prevented = true}});
 
   assert.equal(prevented, true);
