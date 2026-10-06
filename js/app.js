@@ -1,17 +1,21 @@
 const $=s=>document.querySelector(s);
 const MODES={mel:['Melody',[2]],pia:['Piano',[2,-10]],drm:['Drums',[0]]};
 const DUR=[[16,'Whole'],[8,'Half'],[4,'Quarter'],[2,'Eighth'],[1,'16th']];
+const DEFAULT_PAGE_WIDTH=8;
+const PAGE_UNITS_PER_IN=1170/DEFAULT_PAGE_WIDTH;
+const pageWidthValue=value=>{const width=Number(value);return Number.isFinite(width)&&width!==0?Math.round(Math.min(15,Math.max(5,width))*10)/10:DEFAULT_PAGE_WIDTH};
+const normalizePageWidth=score=>{score.pageWidth=pageWidthValue(score.pageWidth)};
 const LN=[['Hi-hat',9,1,1],['Crash',10,1,1],['Ride',8,1,1],['Tom',7,0,0],['Snare',5,0,0],['Floor tom',3,0,0],['Kick',1,0,0]];
 const TUN={g:{o:[-8,-3,2,7,11,16]},b:{o:[-20,-15,-10,-5]}};
 const HINT={mel:'Tap the staff to place a note at the chosen length. Tap a note again to remove it.',pia:'Tap either staff. Notes of the same length at the same spot stack into chords.',drm:'Tap circles to place hits. Use ‹ › or tap a measure above to switch measures.'};
 const TH={c:'Type a chord, then tap where it starts. Tap the same spot with the same chord to remove it.',d:'Draw with a stylus. To scroll while drawing, use a finger outside the score.',e:'Tap a pen mark to erase it.',r:'Tap to place a rest at the chosen length.'};
-const fresh=()=>({title:'Untitled',author:'',mode:'mel',cur:0,n:4,d:4,acc:0,tool:'n',dinput:'grid',showInk:true,cv:'C',z:0,tab:'',kit:[0,4,6],D:{mel:[[]],pia:[[],[]],drm:[[]]},ch:{},ink:{}});
+const fresh=()=>({title:'Untitled',author:'',pageWidth:DEFAULT_PAGE_WIDTH,mode:'mel',cur:0,n:4,d:4,acc:0,tool:'n',dinput:'grid',showInk:true,cv:'C',z:0,tab:'',kit:[0,4,6],D:{mel:[[]],pia:[[],[]],drm:[[]]},ch:{},ink:{}});
 let S,G={},hist=[],DL=null;
 try{S=JSON.parse(localStorage.getItem('ns1'))}catch(e){}
 if(!S||!S.D)S=fresh();
 if(S.mode=='cho')S.mode='mel';delete S.D.cho;
 if(!S.kit){S.kit=[0,4,6];(S.D.drm[0]||[]).forEach(m=>m.forEach(e=>e[2]=[0,4,6][e[2]]))}
-S.ch=S.ch||{};S.ink=S.ink||{};S.tab=S.tab||'';S.z=S.z||0;S.dinput=S.dinput||'grid';S.showInk=S.showInk!==false;
+normalizePageWidth(S);S.ch=S.ch||{};S.ink=S.ink||{};S.tab=S.tab||'';S.z=S.z||0;S.dinput=S.dinput||'grid';S.showInk=S.showInk!==false;
 for(const k in S.ch)if(typeof S.ch[k]=='string'){(S.ch.mel=S.ch.mel||{})[k]=S.ch[k];delete S.ch[k]}
 const cc=()=>S.ch[S.mode]||(S.ch[S.mode]={}),INK=()=>S.ink[S.mode]||(S.ink[S.mode]=[]);
 const semi=(n,a)=>[0,2,4,5,7,9,11][((n%7)+7)%7]+(a||0)+12*Math.floor(n/7);
@@ -64,11 +68,11 @@ function drums(ev,mx,y0,uw){let s='';const X=u=>mx+14+u*uw,durations={};
  return s}
 
 function build(ex){
- const foc=!ex&&S.z,cw=ex?1200:($('#sc').clientWidth||600),per=foc?1:ex?4:cw<560?2:cw<900?3:4,mw=270,uw=(mw-30)/16;
+ const foc=!ex&&S.z,cw=ex?1200:($('#sc').clientWidth||600),customW=S.pageWidth?Math.round(S.pageWidth*PAGE_UNITS_PER_IN):0,layoutPer=foc?1:ex?4:cw<560?2:cw<900?3:4,maxPer=customW?Math.max(1,Math.floor((customW-90)/270)):layoutPer,per=Math.min(layoutPer,maxPer),mw=270,uw=(mw-30)/16;
  const tb=S.mode=='mel'&&S.tab,NT=tb?TUN[S.tab].o.length:0,SL=MODES[S.mode][1],ns=SL.length,sh=ns+(tb?1:0)>1?250:140,hy=56;
- const base=foc?S.cur:0,cnt=foc?1:S.n,rows=Math.ceil(cnt/per),W=90+per*mw,H=hy+rows*sh+10;
- if(!ex)G={W,per,mw,uw,sh,hy,ns,tb,base,cnt,rows};
- let o=`<rect width="${W}" height="${H}" fill="#fff"/><text x="${W/2}" y="34" font-size="24" font-weight="700" text-anchor="middle">${esc(S.title)}</text><text x="${W-12}" y="50" font-size="13" text-anchor="end" fill="#555">${esc(S.author)}</text>`;
+ const base=foc?S.cur:0,cnt=foc?1:S.n,rows=Math.ceil(cnt/per),contentW=90+per*mw,H=hy+rows*sh+10,W=customW||contentW,scale=W/contentW,pageH=H*scale;
+ if(!ex)G={W,scale,per,mw,uw,sh,hy,ns,tb,base,cnt,rows};
+ let o=`<text x="${contentW/2}" y="34" font-size="24" font-weight="700" text-anchor="middle">${esc(S.title)}</text><text x="12" y="50" font-size="13" text-anchor="start" fill="#555">${esc(S.author)}</text>`;
  for(let si=0;si<rows;si++){
   const mc=Math.min(per,cnt-si*per),xe=80+mc*mw,Y=k=>hy+si*sh+50+k*100,bot=tb?Y(1)+(NT-1)*10:Y(ns-1)+40;
   o+=ln(20,Y(0),20,bot,1.5)+`<text x="24" y="${Y(0)-12}" font-size="10" fill="#888">${base+si*per+1}</text>`;
@@ -93,13 +97,15 @@ function build(ex){
   if(ns>1)o+=ln(xe,Y(0),xe,Y(1)+40,mi_end(si,per,cnt)?3:1)}
  if(S.showInk)(S.ink[S.mode]||[]).forEach(st=>{const r=st.m-base;if(r<0||r>=cnt)return;const mx=80+(r%per)*mw,sy=hy+Math.floor(r/per)*sh;
   o+=`<path d="M${st.p.map(q=>(mx+q[0]).toFixed(1)+' '+(sy+q[1]).toFixed(1)).join('L')}" fill="none" stroke="#c0392b" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>`});
- return{s:`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" ${ex?`width="${W}" height="${H}"`:''} font-family="'Noto Music','Apple Symbols','Segoe UI Symbol','Helvetica Neue',Arial,sans-serif">${o}</svg>`,W,H}}
+ const widthStyle=!ex&&S.pageWidth?`style="width:${W}px;max-width:none"`:'';
+ return{s:`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${pageH}" width="${W}px" height="${pageH}px" ${widthStyle} font-family="'Noto Music','Apple Symbols','Segoe UI Symbol','Helvetica Neue',Arial,sans-serif"><rect width="${W}" height="${pageH}" fill="#fff"/><g id="score-content" transform="scale(${scale})">${o}</g></svg>`,W,H,pageW:W,pageH,scale}}
 const mi_end=(si,per,cnt)=>(si+1)*per>=cnt;
 function draw(){$('#sc').innerHTML=build(false).s}
 
 function ui(){
  document.documentElement.classList.toggle('draw-mode',S.tool=='d');
  $('#tabs').innerHTML=Object.entries(MODES).map(([k,v])=>`<button data-m="${k}" class="${S.mode==k?'on':''}">${v[0]}</button>`).join('');
+ $('#pageWidth').value=S.pageWidth??'';
  const dr=S.mode=='drm',md=S.tool=='n'||S.tool=='r';
  $('#pal').innerHTML=dr?'':DUR.map(([d,n])=>`<button data-d="${d}" class="${S.d==d&&md?'on':''}">${n}</button>`).join('')+[[0,'♮'],[1,'♯'],[-1,'♭']].map(([a,t])=>`<button data-a="${a}" class="${S.acc==a?'on':''}">${t}</button>`).join('');
  $('#tl').innerHTML=(dr?(S.dinput=='pen'?`<button data-t="e" class="${S.tool=='e'?'on':''}">Erase pen</button>`:''):[['n','Notes'],['r','Rest'],['c','Chords'],['d','Pen'],['e','Erase pen']].map(([t,n])=>`<button data-t="${t}" class="${S.tool==t?'on':''}">${n}</button>`).join(''))
@@ -114,7 +120,7 @@ function ui(){
    +S.kit.map(l=>`<div class="gr"><b>${LN[l][0]}<button data-k="${l}" style="min-height:0;padding:0 6px;background:none;color:var(--mu)">×</button></b>`+Array.from({length:16},(_,u)=>`<button class="c${u&&u%4==0?' q':''}${ev.some(q=>q[0]==u&&q[2]==l)?' on':''}" data-g="${l},${u}"></button>`).join('')+'</div>').join(''):''):'';
  msg(TH[S.tool]||HINT[S.mode])}
 
-const XY=e=>{const r=$('#sc svg').getBoundingClientRect(),k=G.W/r.width;return[(e.clientX-r.left)*k,(e.clientY-r.top)*k]};
+const XY=e=>{const r=$('#sc svg').getBoundingClientRect(),k=G.W/r.width/G.scale;return[(e.clientX-r.left)*k,(e.clientY-r.top)*k]};
 const LOC=(x,y)=>{y-=G.hy;if(y<0||x<80)return;const si=Math.floor(y/G.sh),j=Math.floor((x-80)/G.mw),mi=G.base+si*G.per+j;if(si>=G.rows||j>=G.per||mi>=S.n)return;return{mi,yy:y-si*G.sh,mx:80+j*G.mw,sy:G.hy+si*G.sh}};
 const PLOC=(x,y)=>y<0?undefined:LOC(x,Math.max(y,G.hy));
 function tap(e){if(!$('#sc svg')||S.tool=='d')return;
@@ -143,7 +149,7 @@ sc.addEventListener('pointercancel',e=>{if(tapStart&&tapStart.id==e.pointerId)ta
 let pen=null;
 sc.addEventListener('pointerdown',e=>{if(S.tool!='d'||e.pointerType=='touch'||!$('#sc svg'))return;const[x,y]=XY(e),l=PLOC(x,y);if(!l)return;
  e.preventDefault();sc.setPointerCapture(e.pointerId);pen={m:l.mi,mx:l.mx,sy:l.sy,p:[[+(x-l.mx).toFixed(1),+(y-l.sy).toFixed(1)]],el:document.createElementNS(NS,'path')};
- for(const[k,v]of Object.entries({fill:'none',stroke:'#c0392b','stroke-width':2.2,'stroke-linecap':'round'}))pen.el.setAttribute(k,v);$('#sc svg').appendChild(pen.el)});
+ for(const[k,v]of Object.entries({fill:'none',stroke:'#c0392b','stroke-width':2.2,'stroke-linecap':'round'}))pen.el.setAttribute(k,v);$('#score-content').appendChild(pen.el)});
 sc.addEventListener('pointermove',e=>{if(!pen)return;const[x,y]=XY(e);pen.p.push([+(x-pen.mx).toFixed(1),+(y-pen.sy).toFixed(1)]);pen.el.setAttribute('d','M'+pen.p.map(q=>(pen.mx+q[0])+' '+(pen.sy+q[1])).join('L'))});
 sc.addEventListener('pointerup',()=>{if(!pen)return;const t=pen;pen=null;if(t.p.length<2)t.p.push([t.p[0][0]+.1,t.p[0][1]]);push();INK().push({m:t.m,p:t.p});go()});
 const touchPoints=new Map();let touchPanY=null;
@@ -165,13 +171,14 @@ document.addEventListener('click',e=>{const b=e.target.closest('button');if(!b)r
 
 $('#ti').oninput=e=>{S.title=e.target.value;sv();draw()};
 $('#au').oninput=e=>{S.author=e.target.value;sv();draw()};
-$('#f').onchange=async e=>{const f=e.target.files[0];if(!f)return;try{const o=JSON.parse(await f.text());if(!o.D)throw 0;push();S=o;$('#ti').value=S.title||'';$('#au').value=S.author||'';go()}catch(x){msg('That file is not a saved score.')}e.target.value=''};
+$('#pageWidth').onchange=e=>{const width=pageWidthValue(e.target.value);if(width!==S.pageWidth)push();S.pageWidth=width;go()};
+$('#f').onchange=async e=>{const f=e.target.files[0];if(!f)return;try{const o=JSON.parse(await f.text());if(!o.D)throw 0;push();S=o;normalizePageWidth(S);$('#ti').value=S.title||'';$('#au').value=S.author||'';go()}catch(x){msg('That file is not a saved score.')}e.target.value=''};
 
 async function out(name,data){try{if(DL)await DL.save({filename:name,data});else{const a=document.createElement('a');a.href=URL.createObjectURL(data instanceof Blob?data:new Blob([data]));a.download=name;a.click()}}catch(e){if(!e||e.code!='declined')msg('Could not save: '+((e&&e.message)||e))}}
 async function cv(){const o=build(true),im=new Image();im.src='data:image/svg+xml;charset=utf-8,'+encodeURIComponent(o.s);await im.decode();
- const c=document.createElement('canvas');c.width=o.W*2;c.height=o.H*2;const x=c.getContext('2d');x.fillStyle='#fff';x.fillRect(0,0,c.width,c.height);x.drawImage(im,0,0,c.width,c.height);return c}
+ const c=document.createElement('canvas'),scale=S.pageWidth?300/PAGE_UNITS_PER_IN:2;c.width=Math.round(o.pageW*scale);c.height=Math.round(o.pageH*scale);const x=c.getContext('2d');x.fillStyle='#fff';x.fillRect(0,0,c.width,c.height);x.drawImage(im,0,0,c.width,c.height);return c}
 async function pdf(){const c=await cv(),jb=await new Promise(r=>c.toBlob(r,'image/jpeg',.92)),jd=new Uint8Array(await jb.arrayBuffer());
- const pw=595,ph=Math.round(pw*c.height/c.width),en=new TextEncoder(),parts=[],off=[];let len=0;
+ const pw=S.pageWidth?Math.round(S.pageWidth*72):595,ph=Math.round(pw*c.height/c.width),en=new TextEncoder(),parts=[],off=[];let len=0;
  const add=b=>{parts.push(b);len+=b.length};
  const obj=(i,s,bin)=>{off[i]=len;add(en.encode(i+' 0 obj\n'+s+(bin?'\nstream\n':'\n')));if(bin){add(bin);add(en.encode('\nendstream\nendobj\n'))}else add(en.encode('endobj\n'))};
  add(en.encode('%PDF-1.4\n'));

@@ -46,7 +46,7 @@ function createApp() {
     }
   }
 
-  for (const id of ['html', 'tabs', 'pal', 'tl', 'g', 'sc', 'h', 'ti', 'au', 'f']) {
+  for (const id of ['html', 'tabs', 'pal', 'tl', 'g', 'sc', 'h', 'ti', 'au', 'f', 'pageWidth']) {
     elements.set(id, new Element(id));
   }
 
@@ -54,11 +54,14 @@ function createApp() {
     querySelector(selector) {
       if (selector === '#sc svg') {
         if (!elements.get('sc').innerHTML.includes('<svg')) return null;
+        const width = Number(elements.get('sc').innerHTML.match(/<svg[^>]+width="([\d.]+)px"/)?.[1] || 600);
+        const height = Number(elements.get('sc').innerHTML.match(/<svg[^>]+height="([\d.]+)px"/)?.[1] || 400);
         return {
-          getBoundingClientRect: () => ({left: 0, top: 0, width: 600, height: 400}),
+          getBoundingClientRect: () => ({left: 0, top: 0, width, height}),
           appendChild() {}
         };
       }
+      if (selector === '#score-content') return {appendChild() {}};
       return elements.get(selector.slice(1)) || null;
     },
     addEventListener(name, callback) {
@@ -120,6 +123,36 @@ test('canceled score gestures are ignored', () => {
   score.dispatch('pointercancel', {pointerId: 1});
   score.dispatch('pointerup', {pointerId: 1, clientX: 150, clientY: 80});
   assert.equal(app.evaluate('S.D.mel[0][0].length'), 0);
+});
+
+test('page width defaults to 8 inches and supports 5–15 inch overrides', () => {
+  const app = createApp();
+  const control = app.elements.get('pageWidth');
+  app.evaluate('S.D.mel[0][0].push([0, 4, 0, 0])');
+
+  assert.equal(app.evaluate('S.pageWidth'), 8);
+  const defaultPage = app.evaluate('build(false).s');
+  assert.match(defaultPage, /viewBox="0 0 1170 /);
+  assert.match(defaultPage, /<text x="12" y="50" font-size="13" text-anchor="start"/);
+  app.evaluate('S.pageWidth = null; normalizePageWidth(S)');
+  assert.equal(app.evaluate('S.pageWidth'), 8);
+
+  control.value = '5';
+  control.onchange({target: control});
+  assert.equal(app.evaluate('S.pageWidth'), 5);
+  assert.equal(app.evaluate('G.per'), 2);
+  const narrowPage = app.evaluate('build(true).s');
+  assert.match(narrowPage, /viewBox="0 0 731 /);
+  assert.match(narrowPage, /transform="scale\(1\.16/);
+  assert.match(narrowPage, /<ellipse cx="94" cy="156" rx="6" ry="4\.5"/);
+
+  control.value = '16';
+  control.onchange({target: control});
+  assert.equal(app.evaluate('S.pageWidth'), 15);
+  const widePage = app.evaluate('build(true).s');
+  assert.match(widePage, /viewBox="0 0 2194 /);
+  assert.match(widePage, /transform="scale\(1\.87/);
+  assert.match(widePage, /<ellipse cx="94" cy="156" rx="6" ry="4\.5"/);
 });
 
 test('pen mode records stylus strokes and disables browser panning on the score', () => {
