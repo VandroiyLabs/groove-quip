@@ -389,9 +389,12 @@ test('annotation visibility can be toggled without deleting stored strokes', () 
 test('about page links to the editor and presents screenshots in order', () => {
   const about = fs.readFileSync(path.join(__dirname, '..', 'about', 'index.html'), 'utf8');
   const appShell = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
+  const captureScript = fs.readFileSync(path.join(__dirname, '..', 'scripts', 'capture-about-screenshots.js'), 'utf8');
+  const packageJson = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'package.json'), 'utf8'));
   const screenshots = [
     '../assets/screenshots/01-melody.png',
     '../assets/screenshots/02-drums-grid.png',
+    '../assets/screenshots/04-patterns.png',
     '../assets/screenshots/03-melody-annotations.png'
   ];
 
@@ -400,6 +403,27 @@ test('about page links to the editor and presents screenshots in order', () => {
   const positions = screenshots.map(image => about.indexOf(image));
   assert.ok(positions.every(position => position >= 0));
   assert.deepEqual(positions, [...positions].sort((a, b) => a - b));
+  assert.ok(screenshots.every(image => captureScript.includes(path.basename(image))));
+  assert.match(captureScript, /Riff 1 - Verse/);
+  assert.match(captureScript, /Riff 2 - Chorus/);
+  assert.match(captureScript, /pattern\.n !== 2/);
+  assert.match(about, /quick, touch-friendly music notation sketchpad/);
+  assert.match(about, /not for writing or engraving big, finished pieces/);
+  assert.ok(about.indexOf('idea-callout') > about.indexOf('01-melody.png'));
+  assert.ok(about.indexOf('patterns-title') < about.indexOf('pen-title'));
+  assert.match(captureScript, /width: 768, height: 1024/);
+  assert.match(captureScript, /deviceScaleFactor: 2/);
+  assert.match(captureScript, /height: viewport\.height \* \.75/);
+  assert.equal(packageJson.scripts['screenshots:about'], 'node scripts/capture-about-screenshots.js');
+  for (const image of screenshots) {
+    const png = fs.readFileSync(path.join(__dirname, '..', 'about', image));
+    const dimensions = about.match(new RegExp(`<img src="${image.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}"[^>]*width="(\\d+)" height="(\\d+)"`));
+    assert.ok(dimensions, `${image} must declare intrinsic dimensions`);
+    assert.equal(Number(dimensions[1]), png.readUInt32BE(16));
+    assert.equal(Number(dimensions[2]), png.readUInt32BE(20));
+    assert.equal(png.readUInt32BE(16), 1536);
+    assert.equal(png.readUInt32BE(20), image.includes('03-melody-annotations') || image.includes('04-patterns') ? 1536 : 2048);
+  }
 });
 
 test('main title uses the About wordmark in a full-width contrasting stripe', () => {

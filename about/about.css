@@ -59,7 +59,7 @@ a { color: inherit; }
 .intro {
   max-width: 1100px;
   margin: 0 auto;
-  padding: 88px 5vw 62px;
+  padding: 72px 5vw 68px;
 }
 
 .eyebrow {
@@ -96,10 +96,38 @@ h1 {
 .brand-accent { color: #70cf70; }
 
 .intro-copy {
-  max-width: 690px;
-  margin-bottom: 0;
+  max-width: 820px;
+  margin-bottom: 16px;
+  color: var(--paper);
+  font-family: "Iowan Old Style", "Baskerville", "Palatino Linotype", Georgia, serif;
+  font-size: clamp(28px, 4vw, 46px);
+  line-height: 1.16;
+}
+
+.intro-summary {
+  max-width: 720px;
+  margin-bottom: 24px;
   color: #c3c6cc;
-  font-size: 20px;
+  font-size: 18px;
+}
+
+.intro-cta { margin-bottom: 28px; }
+
+.feature-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.feature-list li {
+  padding: 5px 12px;
+  border: 1px solid var(--line);
+  border-radius: 99px;
+  color: var(--muted);
+  font-size: 13px;
 }
 
 .showcase {
@@ -112,6 +140,7 @@ h1 {
 }
 
 .showcase-drums { grid-template-columns: minmax(260px, .72fr) minmax(0, 1.28fr); }
+.showcase-patterns { background: #1a1d22; }
 .showcase-pen { border-bottom: 1px solid var(--line); }
 
 .screen-figure { min-width: 0; margin: 0; }
@@ -146,6 +175,26 @@ h2 {
   color: #c3c6cc;
 }
 
+.idea-callout {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 24px 5vw;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+  background: #1a1d22;
+}
+
+.idea-callout .eyebrow { margin: 0; }
+
+.idea-callout > p:last-child {
+  margin: 0;
+  color: var(--paper);
+  font-family: "Iowan Old Style", "Baskerville", "Palatino Linotype", Georgia, serif;
+  font-size: 24px;
+}
+
 .closing {
   display: flex;
   align-items: center;
@@ -160,6 +209,9 @@ h2 {
   font-size: 30px;
 }
 
+.closing .eyebrow { margin-bottom: 8px; }
+.closing-copy { max-width: 680px; }
+
 .site-footer {
   border-top: 1px solid var(--line);
   color: var(--muted);
@@ -172,18 +224,24 @@ h2 {
   body { font-size: 16px; }
   .site-header,
   .site-footer { padding-right: 20px; padding-left: 20px; }
-  .intro { padding: 64px 20px 42px; }
+  .intro { padding: 58px 20px 44px; }
   h1 { font-size: 46px; }
   .brand-title { font-size: 40px; }
-  .intro-copy { font-size: 18px; }
+  .intro-copy { font-size: 30px; }
+  .intro-summary { font-size: 16px; }
   .showcase,
-  .showcase-drums {
+  .showcase-drums,
+  .showcase-patterns {
     grid-template-columns: 1fr;
     gap: 30px;
     padding: 40px 20px 48px;
   }
   .showcase-drums .showcase-copy { order: 2; }
   .showcase-drums .screen-figure { order: 1; }
+  .showcase-patterns .screen-figure { order: 1; }
+  .showcase-patterns .showcase-copy { order: 2; }
+  .idea-callout { align-items: flex-start; flex-direction: column; gap: 8px; padding: 24px 20px; }
+  .idea-callout > p:last-child { font-size: 22px; }
   h2 { font-size: 34px; }
   .closing { align-items: flex-start; flex-direction: column; padding: 34px 20px; }
 }

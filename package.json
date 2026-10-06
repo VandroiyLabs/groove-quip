@@ -2,6 +2,10 @@
   "name": "groove-quip",
   "private": true,
   "scripts": {
-    "test": "node --test"
+    "test": "node --test",
+    "screenshots:about": "node scripts/capture-about-screenshots.js"
+  },
+  "devDependencies": {
+    "playwright": "^1.63.0"
   }
 }
