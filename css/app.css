@@ -18,6 +18,8 @@ html.draw-mode{touch-action:none}
 .c.on{background:var(--tx);border-color:var(--tx)}
 .c.q{margin-left:6px}
 #h{color:var(--mu);font-size:13px;padding:6px 14px 24px}
+.file-actions{margin-top:4px;border-top:1px solid var(--bt);padding-top:8px}
+.file-actions h2{margin:0 12px;color:var(--mu);font-size:13px;font-weight:600}
 .site-footer{padding:10px 16px 28px;color:var(--mu);font-size:13px;line-height:1.5}
 .site-footer a{color:var(--ac);text-decoration:none}
 .site-footer a:hover{text-decoration:underline}
