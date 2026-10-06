@@ -100,7 +100,7 @@ function build(ex){
  let o=`<text x="${W/2}" y="34" font-size="24" font-weight="700" text-anchor="middle">${esc(S.title)}</text><text x="12" y="50" font-size="13" text-anchor="start" fill="#555">${esc(S.author)}</text>`;
  for(const group of groups){
   const{pattern,base,count,top,staffTop,mw,uw}=group,xe=80+count*mw,Y=k=>staffTop+50+k*100,bot=tb?Y(1)+(NT-1)*10:Y(ns-1)+40;
-  let row=`<text x="12" y="${top+20}" font-size="17" font-weight="700">${esc(pattern.name)}</text>`;
+  let row=`<text x="12" y="${top+28}" font-size="22" font-weight="700" fill="#2563eb">${esc(pattern.name)}</text><path d="M12 ${top+38}H40" stroke="#3b82f6" stroke-width="3" stroke-linecap="round"/>`;
   row+=ln(20,Y(0),20,bot,1.5)+`<text x="24" y="${Y(0)-12}" font-size="10" fill="#888">${base+1}</text>`;
   SL.forEach((b,k)=>{
   for(let i=0;i<5;i++)row+=ln(20,Y(k)+i*10,xe,Y(k)+i*10,.8);
@@ -119,11 +119,12 @@ function build(ex){
     row+=`<rect x="${x-7}" y="${y-8}" width="14" height="16" fill="#fff"/><text x="${x}" y="${y+5}" font-size="14" font-weight="700" text-anchor="middle">${q[0]}</text>`})}}
   const ch=pattern.ch[S.mode]||{};
   for(const key in ch){const[a,u]=key.split(':').map(Number),r=a-base;
-  if(r>=0&&r<count)row+=`<text x="${80+r*mw+8+u*uw}" y="${Y(0)-28}" font-size="24" font-weight="700" font-family="'Comic Sans MS','Comic Neue','Chalkboard SE','Marker Felt',cursive">${esc(ch[key])}</text>`}
+  if(r>=0&&r<count)row+=`<text x="${80+r*mw+8+u*uw}" y="${Y(0)-20}" font-size="24" font-weight="700" font-family="'Comic Sans MS','Comic Neue','Chalkboard SE','Marker Felt',cursive">${esc(ch[key])}</text>`}
   if(ns>1)row+=ln(xe,Y(0),xe,Y(1)+40,3);
   if(S.showInk)(pattern.ink[S.mode]||[]).forEach(st=>{const r=st.m-base;if(r<0||r>=count)return;const mx=80+r*mw;
   row+=`<path d="M${st.p.map(q=>(mx+q[0]).toFixed(1)+' '+(top+q[1]).toFixed(1)).join('L')}" fill="none" stroke="#c0392b" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>`});
   o+=`<g id="pattern-content-${pattern.id}" data-pattern-id="${pattern.id}">${row}</g>`;
+  if(groups[groups.length-1]!==group)o+=`<path d="M12 ${top+sh+rowGap/2}H${W-12}" stroke="#d7dce3" stroke-width="1"/>`;
  }
  const widthStyle=!ex?`style="width:${W}px;max-width:none"`:'';
  return{s:`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${pageH}" width="${W}px" height="${pageH}px" ${widthStyle} font-family="'Noto Music','Apple Symbols','Segoe UI Symbol','Helvetica Neue',Arial,sans-serif"><rect width="${W}" height="${pageH}" fill="#fff"/><g id="score-content">${o}</g></svg>`,W,H,pageW:W,pageH,scale:1}}

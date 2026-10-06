@@ -197,6 +197,7 @@ test('patterns isolate measures and support naming, duplication, ordering, and d
   app.elements.get('patternName').value = 'Verse';
   app.elements.get('patternName').oninput({target: app.elements.get('patternName')});
   app.evaluate('P().D.mel[0][0].push([0, 4, 2, 0])');
+  app.evaluate("(P().ch.mel ||= {})['0:0'] = 'Am'");
   app.clickAction('add');
   assert.equal(app.evaluate('P().n'), 3);
   assert.equal(app.evaluate('P().D.mel[0].length'), 3);
@@ -207,6 +208,11 @@ test('patterns isolate measures and support naming, duplication, ordering, and d
   assert.match(svg, /id="pattern-content-2"/);
   assert.match(svg, />Pattern 1</);
   assert.match(svg, />Verse</);
+  assert.match(svg, /<text x="12" y="84" font-size="22" font-weight="700" fill="#2563eb">Pattern 1<\/text>/);
+  assert.match(svg, /<path d="M20 138L\d+ 138" stroke="#111"/);
+  assert.match(svg, /<path d="M12 215H\d+" stroke="#d7dce3"/);
+  assert.match(svg, /y="296" font-size="24" font-weight="700" font-family=.*>Am<\/text>/);
+  assert.match(app.evaluate('build(true).s'), /font-size="22" font-weight="700" fill="#2563eb">Verse<\/text>/);
   assert.ok(app.evaluate('G.patterns[1].top > G.patterns[0].top'));
 
   app.clickAction('pat-duplicate');
