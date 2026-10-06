@@ -7,6 +7,9 @@ button,input,select{font:inherit;color:var(--tx);background:var(--bt);border:0;b
 input{background:var(--pn);border:1px solid var(--bt);flex:1;min-width:110px}
 .page-width-control{display:flex;align-items:center;gap:8px;color:var(--mu);font-size:13px;white-space:nowrap}
 .page-width-control input{flex:0 0 88px;min-width:88px;padding:8px 10px}
+.pattern-controls{padding-top:4px;padding-bottom:4px}
+.pattern-controls select{flex:1;min-width:110px}
+.pattern-controls input{flex:1;min-width:110px}
 button.on{background:var(--ac);color:#fff}
 #sc{background:var(--panel);margin:4px 0;overflow-x:auto;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
 #sc svg{display:block;width:100%;height:auto;outline:1px solid #d1d5db;outline-offset:-1px}

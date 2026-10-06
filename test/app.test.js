@@ -6,7 +6,7 @@ const vm = require('node:vm');
 
 const source = fs.readFileSync(path.join(__dirname, '..', 'js', 'app.js'), 'utf8');
 
-function createApp() {
+function createApp(storedState = null) {
   const elements = new Map();
   const documentListeners = {};
   let drawCount = 0;
@@ -24,6 +24,7 @@ function createApp() {
       this.clientWidth = id === 'sc' ? 600 : 0;
       this.textContent = '';
       this._innerHTML = '';
+      this.selectedOptions = [];
     }
 
     addEventListener(name, callback) {
@@ -46,7 +47,7 @@ function createApp() {
     }
   }
 
-  for (const id of ['html', 'tabs', 'pal', 'tl', 'g', 'sc', 'h', 'ti', 'au', 'f', 'pageWidth']) {
+  for (const id of ['html', 'tabs', 'pal', 'tl', 'g', 'sc', 'h', 'ti', 'au', 'f', 'pageWidth', 'patterns', 'patternSelect', 'patternName']) {
     elements.set(id, new Element(id));
   }
 
@@ -61,7 +62,7 @@ function createApp() {
           appendChild() {}
         };
       }
-      if (selector === '#score-content') return {appendChild() {}};
+      if (selector === '#score-content' || selector.startsWith('#pattern-content-')) return {appendChild() {}};
       return elements.get(selector.slice(1)) || null;
     },
     addEventListener(name, callback) {
@@ -73,13 +74,14 @@ function createApp() {
 
   const window = {
     get scrollY() { return scrollY; },
-    scrollBy(_x, deltaY) { scrollY = Math.max(0, Math.min(1000, scrollY + deltaY)); }
+    scrollBy(_x, deltaY) { scrollY = Math.max(0, Math.min(1000, scrollY + deltaY)); },
+    confirm() { return true; }
   };
   const sandbox = {
     document,
     window,
     localStorage: {
-      getItem: () => null,
+      getItem: () => storedState,
       setItem() {}
     },
     addEventListener() {}
@@ -140,19 +142,77 @@ test('page width defaults to 8 inches and supports 5–15 inch overrides', () =>
   control.value = '5';
   control.onchange({target: control});
   assert.equal(app.evaluate('S.pageWidth'), 5);
-  assert.equal(app.evaluate('G.per'), 2);
+  assert.equal(app.evaluate('G.patterns[0].count'), 2);
   const narrowPage = app.evaluate('build(true).s');
   assert.match(narrowPage, /viewBox="0 0 731 /);
-  assert.match(narrowPage, /transform="scale\(1\.16/);
-  assert.match(narrowPage, /<ellipse cx="94" cy="156" rx="6" ry="4\.5"/);
+  assert.doesNotMatch(narrowPage, /transform="scale\(/);
+  assert.match(narrowPage, /<ellipse cx="94" cy="188" rx="6" ry="4\.5"/);
 
   control.value = '16';
   control.onchange({target: control});
   assert.equal(app.evaluate('S.pageWidth'), 15);
   const widePage = app.evaluate('build(true).s');
   assert.match(widePage, /viewBox="0 0 2194 /);
-  assert.match(widePage, /transform="scale\(1\.87/);
-  assert.match(widePage, /<ellipse cx="94" cy="156" rx="6" ry="4\.5"/);
+  assert.doesNotMatch(widePage, /transform="scale\(/);
+  assert.match(widePage, /<ellipse cx="94" cy="188" rx="6" ry="4\.5"/);
+});
+
+test('legacy scores migrate into one named pattern without losing score data', () => {
+  const legacy = {
+    title: 'Old score',
+    mode: 'mel',
+    cur: 1,
+    n: 3,
+    D: {mel: [[[[0, 4, 2, 1]], [[4, 2, 3, 0]], []]], pia: [[], []], drm: [[]]},
+    ch: {mel: {'1:0': 'Am'}},
+    ink: {mel: [{m: 1, p: [[10, 20], [12, 22]]}]}
+  };
+  const app = createApp(JSON.stringify(legacy));
+
+  assert.equal(app.evaluate('S.patterns.length'), 1);
+  assert.equal(app.evaluate('P().name'), 'Pattern 1');
+  assert.equal(app.evaluate('P().n'), 3);
+  assert.equal(app.evaluate('P().cur'), 1);
+  assert.deepEqual(JSON.parse(JSON.stringify(app.evaluate('P().D.mel[0][0]'))), [[0, 4, 2, 1]]);
+  assert.equal(app.evaluate("P().ch.mel['1:0']"), 'Am');
+  assert.equal(app.evaluate('P().ink.mel.length'), 1);
+});
+
+test('patterns isolate measures and support naming, duplication, ordering, and deletion', async () => {
+  const app = createApp();
+  app.clickAction('pat-add');
+  assert.equal(app.evaluate('S.patterns.length'), 2);
+  assert.equal(app.evaluate('P().n'), 2);
+
+  app.elements.get('patternName').value = 'Verse';
+  app.elements.get('patternName').oninput({target: app.elements.get('patternName')});
+  app.evaluate('P().D.mel[0][0].push([0, 4, 2, 0])');
+  app.clickAction('add');
+  assert.equal(app.evaluate('P().n'), 3);
+  assert.equal(app.evaluate('P().D.mel[0].length'), 3);
+  assert.equal(app.evaluate('S.patterns[0].n'), 2);
+
+  const svg = app.evaluate('build(false).s');
+  assert.match(svg, /id="pattern-content-1"/);
+  assert.match(svg, /id="pattern-content-2"/);
+  assert.match(svg, />Pattern 1</);
+  assert.match(svg, />Verse</);
+  assert.ok(app.evaluate('G.patterns[1].top > G.patterns[0].top'));
+
+  app.clickAction('pat-duplicate');
+  assert.equal(app.evaluate('S.patterns.length'), 3);
+  assert.equal(app.evaluate('P().name'), 'Verse copy');
+  assert.deepEqual(JSON.parse(JSON.stringify(app.evaluate('P().D.mel[0][0]'))), [[0, 4, 2, 0]]);
+  app.clickAction('pat-up');
+  assert.equal(app.evaluate('S.patterns[1].id'), app.evaluate('P().id'));
+  const savedPatterns = app.evaluate('JSON.stringify(S)');
+  const fileTarget = {files: [{text: async () => savedPatterns}], value: 'patterns.json'};
+  await app.elements.get('f').onchange({target: fileTarget});
+  assert.equal(app.evaluate('S.patterns.length'), 3);
+  assert.equal(app.evaluate('S.patterns[1].id'), app.evaluate('P().id'));
+  app.clickAction('pat-delete');
+  assert.equal(app.evaluate('S.patterns.length'), 2);
+  assert.equal(app.evaluate('P().name'), 'Pattern 1');
 });
 
 test('pen mode records stylus strokes and disables browser panning on the score', () => {
@@ -167,6 +227,21 @@ test('pen mode records stylus strokes and disables browser panning on the score'
 
   assert.equal(app.evaluate('INK().length'), 1);
   assert.match(fs.readFileSync(path.join(__dirname, '..', 'css', 'app.css'), 'utf8'), /html\.draw-mode\{touch-action:none\}/);
+});
+
+test('drum Pen mode records stylus strokes on the active pattern line', () => {
+  const app = createApp();
+  app.evaluate("S.mode = 'drm'; go()");
+  app.clickAction('dinput-pen');
+  const score = app.elements.get('sc');
+
+  assert.equal(app.elements.get('html').classes.has('draw-mode'), true);
+  score.dispatch('pointerdown', {pointerId: 1, pointerType: 'pen', clientX: 150, clientY: 150, preventDefault() {}});
+  score.dispatch('pointermove', {pointerId: 1, pointerType: 'pen', clientX: 170, clientY: 165});
+  score.dispatch('pointerup', {pointerId: 1, pointerType: 'pen', clientX: 170, clientY: 165});
+
+  assert.equal(app.evaluate('INK().length'), 1);
+  assert.equal(app.evaluate('INK()[0].m'), 0);
 });
 
 test('two-finger pan scrolls away from the page bottom in pen mode', () => {

@@ -9,26 +9,50 @@ const LN=[['Hi-hat',9,1,1],['Crash',10,1,1],['Ride',8,1,1],['Tom',7,0,0],['Snare
 const TUN={g:{o:[-8,-3,2,7,11,16]},b:{o:[-20,-15,-10,-5]}};
 const HINT={mel:'Tap the staff to place a note at the chosen length. Tap a note again to remove it.',pia:'Tap either staff. Notes of the same length at the same spot stack into chords.',drm:'Tap circles to place hits. Use ‹ › or tap a measure above to switch measures.'};
 const TH={c:'Type a chord, then tap where it starts. Tap the same spot with the same chord to remove it.',d:'Draw with a stylus. To scroll while drawing, use a finger outside the score.',e:'Tap a pen mark to erase it.',r:'Tap to place a rest at the chosen length.'};
-const fresh=()=>({title:'Untitled',author:'',pageWidth:DEFAULT_PAGE_WIDTH,mode:'mel',cur:0,n:4,d:4,acc:0,tool:'n',dinput:'grid',showInk:true,cv:'C',z:0,tab:'',kit:[0,4,6],D:{mel:[[]],pia:[[],[]],drm:[[]]},ch:{},ink:{}});
+const makeData=n=>({mel:[Array.from({length:n},()=>[])],pia:[Array.from({length:n},()=>[]),Array.from({length:n},()=>[])],drm:[Array.from({length:n},()=>[])]});
+const makePattern=(id,name,n=2)=>({id,name,n,cur:0,D:makeData(n),ch:{},ink:{}});
+const fresh=()=>({title:'Untitled',author:'',pageWidth:DEFAULT_PAGE_WIDTH,mode:'mel',activePatternId:1,nextPatternId:2,patterns:[makePattern(1,'Pattern 1')],d:4,acc:0,tool:'n',dinput:'grid',showInk:true,cv:'C',z:0,tab:'',kit:[0,4,6]});
 let S,G={},hist=[],DL=null;
 try{S=JSON.parse(localStorage.getItem('ns1'))}catch(e){}
-if(!S||!S.D)S=fresh();
-if(S.mode=='cho')S.mode='mel';delete S.D.cho;
-if(!S.kit){S.kit=[0,4,6];(S.D.drm[0]||[]).forEach(m=>m.forEach(e=>e[2]=[0,4,6][e[2]]))}
-normalizePageWidth(S);S.ch=S.ch||{};S.ink=S.ink||{};S.tab=S.tab||'';S.z=S.z||0;S.dinput=S.dinput||'grid';S.showInk=S.showInk!==false;
-for(const k in S.ch)if(typeof S.ch[k]=='string'){(S.ch.mel=S.ch.mel||{})[k]=S.ch[k];delete S.ch[k]}
-const cc=()=>S.ch[S.mode]||(S.ch[S.mode]={}),INK=()=>S.ink[S.mode]||(S.ink[S.mode]=[]);
+if(!S||(!S.D&&!Array.isArray(S.patterns)))S=fresh();
+const normalizeScore=score=>{
+ const legacy=!Array.isArray(score.patterns);
+ if(score.mode=='cho')score.mode='mel';
+ if(legacy){
+  if(score.D)delete score.D.cho;
+  const pattern=makePattern(1,'Pattern 1',Math.max(1,Number(score.n)||4));
+  pattern.cur=Number(score.cur)||0;pattern.D=score.D||pattern.D;pattern.ch=score.ch||{};pattern.ink=score.ink||{};
+  score.patterns=[pattern];score.activePatternId=pattern.id;score.nextPatternId=2;
+  delete score.n;delete score.cur;delete score.D;delete score.ch;delete score.ink;
+ }
+ if(!score.patterns.length)score.patterns=[makePattern(1,'Pattern 1')];
+ score.patterns.forEach((pattern,index)=>{
+  pattern.id=Number(pattern.id)||index+1;pattern.name=String(pattern.name||`Pattern ${index+1}`);
+  pattern.n=Math.max(1,Number(pattern.n)||2);pattern.cur=Math.max(0,Math.min(pattern.n-1,Number(pattern.cur)||0));
+  pattern.D=pattern.D||makeData(pattern.n);delete pattern.D.cho;pattern.ch=pattern.ch||{};pattern.ink=pattern.ink||{};
+  for(const key in pattern.ch)if(typeof pattern.ch[key]=='string'){(pattern.ch.mel=pattern.ch.mel||{})[key]=pattern.ch[key];delete pattern.ch[key]}
+ });
+ if(!score.kit){score.kit=[0,4,6];score.patterns.forEach(pattern=>(pattern.D.drm[0]||[]).forEach(measure=>measure.forEach(event=>event[2]=[0,4,6][event[2]])))}
+ score.mode=score.mode||'mel';score.activePatternId=score.patterns.some(pattern=>pattern.id===Number(score.activePatternId))?Number(score.activePatternId):score.patterns[0].id;
+ score.nextPatternId=Math.max(1,...score.patterns.map(pattern=>pattern.id))+1;
+ normalizePageWidth(score);score.tab=score.tab||'';score.z=score.z||0;score.dinput=score.dinput||'grid';score.showInk=score.showInk!==false;
+};
+normalizeScore(S);
+const P=()=>S.patterns.find(pattern=>pattern.id===S.activePatternId)||S.patterns[0];
+const bindPatternAccessors=()=>Object.defineProperties(S,{n:{configurable:true,get:()=>P().n,set:value=>P().n=value},cur:{configurable:true,get:()=>P().cur,set:value=>P().cur=value},D:{configurable:true,get:()=>P().D,set:value=>P().D=value},ch:{configurable:true,get:()=>P().ch,set:value=>P().ch=value},ink:{configurable:true,get:()=>P().ink,set:value=>P().ink=value}});
+bindPatternAccessors();
+const cc=()=>P().ch[S.mode]||(P().ch[S.mode]={}),INK=()=>P().ink[S.mode]||(P().ink[S.mode]=[]);
 const semi=(n,a)=>[0,2,4,5,7,9,11][((n%7)+7)%7]+(a||0)+12*Math.floor(n/7);
 const cand=e=>{const p=semi(e[2],e[3]);return TUN[S.tab].o.map((v,i)=>[p-v,i]).filter(q=>q[0]>=0&&q[0]<=22).sort((a,b)=>a[0]-b[0])};
 const pick=e=>{const c=cand(e);return c.find(q=>q[1]==e[4])||c[0]};
 (async()=>{try{DL=await window.claude?.use('downloads')}catch(e){}})();
 const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const ln=(a,b,c,d,w=1)=>`<path d="M${a} ${b}L${c} ${d}" stroke="#111" stroke-width="${w}"/>`;
-const fit=()=>{for(const k in S.D)S.D[k].forEach(st=>{while(st.length<S.n)st.push([]);st.length=S.n})};
+const fit=()=>S.patterns.forEach(pattern=>{for(const k in pattern.D)pattern.D[k].forEach(st=>{while(st.length<pattern.n)st.push([]);st.length=pattern.n})});
 const sv=()=>{try{localStorage.setItem('ns1',JSON.stringify(S))}catch(e){}};
 const push=()=>{hist.push(JSON.stringify(S));if(hist.length>40)hist.shift()};
 const msg=t=>{$('#h').textContent=t};
-function go(){fit();sv();ui();draw()}
+function go(){bindPatternAccessors();fit();sv();ui();draw()}
 
 function rests(ev){const o=Array(16).fill(0);ev.forEach(e=>{for(let i=e[0];i<e[0]+e[1];i++)o[i]=1});const r=[];let u=0;
  while(u<16){if(o[u]){u++;continue}let s=16;while(s>1&&(u%s||u+s>16||o.slice(u,u+s).some(x=>x)))s/=2;r.push([u,s]);u+=s}return r}
@@ -68,43 +92,51 @@ function drums(ev,mx,y0,uw){let s='';const X=u=>mx+14+u*uw,durations={};
  return s}
 
 function build(ex){
- const foc=!ex&&S.z,cw=ex?1200:($('#sc').clientWidth||600),customW=S.pageWidth?Math.round(S.pageWidth*PAGE_UNITS_PER_IN):0,layoutPer=foc?1:ex?4:cw<560?2:cw<900?3:4,maxPer=customW?Math.max(1,Math.floor((customW-90)/270)):layoutPer,per=Math.min(layoutPer,maxPer),mw=270,uw=(mw-30)/16;
- const tb=S.mode=='mel'&&S.tab,NT=tb?TUN[S.tab].o.length:0,SL=MODES[S.mode][1],ns=SL.length,sh=ns+(tb?1:0)>1?250:140,hy=56;
- const base=foc?S.cur:0,cnt=foc?1:S.n,rows=Math.ceil(cnt/per),contentW=90+per*mw,H=hy+rows*sh+10,W=customW||contentW,scale=W/contentW,pageH=H*scale;
- if(!ex)G={W,scale,per,mw,uw,sh,hy,ns,tb,base,cnt,rows};
- let o=`<text x="${contentW/2}" y="34" font-size="24" font-weight="700" text-anchor="middle">${esc(S.title)}</text><text x="12" y="50" font-size="13" text-anchor="start" fill="#555">${esc(S.author)}</text>`;
- for(let si=0;si<rows;si++){
-  const mc=Math.min(per,cnt-si*per),xe=80+mc*mw,Y=k=>hy+si*sh+50+k*100,bot=tb?Y(1)+(NT-1)*10:Y(ns-1)+40;
-  o+=ln(20,Y(0),20,bot,1.5)+`<text x="24" y="${Y(0)-12}" font-size="10" fill="#888">${base+si*per+1}</text>`;
+ const foc=!ex&&S.z,W=Math.round(S.pageWidth*PAGE_UNITS_PER_IN);
+ const tb=S.mode=='mel'&&S.tab,NT=tb?TUN[S.tab].o.length:0,SL=MODES[S.mode][1],ns=SL.length,sh=ns+(tb?1:0)>1?250:140,hy=56,rowGap=38;
+ let y=hy;const groups=S.patterns.map(pattern=>{const zoom=foc&&pattern.id===S.activePatternId,base=zoom?pattern.cur:0,count=zoom?1:pattern.n,mw=(W-90)/count,uw=(mw-30)/16,group={id:pattern.id,pattern,base,count,top:y,staffTop:y+32,mw,uw,sh,ns,tb,rowHeight:sh+rowGap};y+=group.rowHeight;return group});
+ const H=y+10,pageH=H;
+ if(!ex)G={W,scale:1,patterns:groups};
+ let o=`<text x="${W/2}" y="34" font-size="24" font-weight="700" text-anchor="middle">${esc(S.title)}</text><text x="12" y="50" font-size="13" text-anchor="start" fill="#555">${esc(S.author)}</text>`;
+ for(const group of groups){
+  const{pattern,base,count,top,staffTop,mw,uw}=group,xe=80+count*mw,Y=k=>staffTop+50+k*100,bot=tb?Y(1)+(NT-1)*10:Y(ns-1)+40;
+  let row=`<text x="12" y="${top+20}" font-size="17" font-weight="700">${esc(pattern.name)}</text>`;
+  row+=ln(20,Y(0),20,bot,1.5)+`<text x="24" y="${Y(0)-12}" font-size="10" fill="#888">${base+1}</text>`;
   SL.forEach((b,k)=>{
-   for(let i=0;i<5;i++)o+=ln(20,Y(k)+i*10,xe,Y(k)+i*10,.8);
-   if(S.mode=='drm')o+=`<rect x="30" y="${Y(k)+10}" width="5" height="20"/><rect x="39" y="${Y(k)+10}" width="5" height="20"/>`;
-   else o+=k?`<text x="24" y="${Y(k)+20}" font-size="40">𝄢</text>`:`<text x="24" y="${Y(k)+34}" font-size="52">𝄞</text>`;
-   if(si==0)o+=`<text x="68" y="${Y(k)+18}" font-size="22" font-weight="700" text-anchor="middle">4</text><text x="68" y="${Y(k)+38}" font-size="22" font-weight="700" text-anchor="middle">4</text>`;
-   for(let j=0;j<mc;j++){const mi=base+si*per+j,mx=80+j*mw;
-    o+=ln(mx+mw,Y(k),mx+mw,Y(k)+40,mi==S.n-1?3:1);
-    if(S.mode=='drm'){if(!ex&&mi==S.cur)o+=`<rect x="${mx}" y="${Y(0)-38}" width="${mw}" height="112" fill="#3b82f6" opacity=".1"/>`;o+=drums(S.D.drm[0][mi],mx,Y(0),uw)}
-    else{const ev=S.D[S.mode][k][mi];ev.forEach(e=>{o+=e[2]==null?rest(e[1]==16?mx+mw/2-7:mx+8+e[0]*uw,Y(k),e[1]):note(mx+14+e[0]*uw,Y(k),b,e)});
-     rests(ev).forEach(([u,d])=>o+=rest(d==16?mx+mw/2-7:mx+8+u*uw,Y(k),d))}}});
-  if(tb){const t=Y(1);for(let i=0;i<NT;i++)o+=ln(20,t+i*10,xe,t+i*10,.8);
-   o+=['T','A','B'].map((c,i)=>`<text x="34" y="${t+(NT-1)*5-8+i*14}" font-size="14" font-weight="700" text-anchor="middle">${c}</text>`).join('');
-   for(let j=0;j<mc;j++){const mi=base+si*per+j,mx=80+j*mw;o+=ln(mx+mw,t,mx+mw,t+(NT-1)*10,mi==S.n-1?3:1);
-    S.D.mel[0][mi].forEach(e=>{if(e[2]==null)return;const q=pick(e);if(!q)return;const x=mx+14+e[0]*uw,y=t+(NT-1-q[1])*10;
-     o+=`<rect x="${x-7}" y="${y-8}" width="14" height="16" fill="#fff"/><text x="${x}" y="${y+5}" font-size="14" font-weight="700" text-anchor="middle">${q[0]}</text>`})}}
-  const ch=S.ch[S.mode]||{};
+  for(let i=0;i<5;i++)row+=ln(20,Y(k)+i*10,xe,Y(k)+i*10,.8);
+  if(S.mode=='drm')row+=`<rect x="30" y="${Y(k)+10}" width="5" height="20"/><rect x="39" y="${Y(k)+10}" width="5" height="20"/>`;
+  else row+=k?`<text x="24" y="${Y(k)+20}" font-size="40">𝄢</text>`:`<text x="24" y="${Y(k)+34}" font-size="52">𝄞</text>`;
+  row+=`<text x="68" y="${Y(k)+18}" font-size="22" font-weight="700" text-anchor="middle">4</text><text x="68" y="${Y(k)+38}" font-size="22" font-weight="700" text-anchor="middle">4</text>`;
+  for(let j=0;j<count;j++){const mi=base+j,mx=80+j*mw;
+   row+=ln(mx+mw,Y(k),mx+mw,Y(k)+40,mi==pattern.n-1?3:1);
+   if(S.mode=='drm'){if(!ex&&pattern.id===S.activePatternId&&mi===pattern.cur)row+=`<rect x="${mx}" y="${Y(0)-38}" width="${mw}" height="112" fill="#3b82f6" opacity=".1"/>`;row+=drums(pattern.D.drm[0][mi],mx,Y(0),uw)}
+   else{const ev=pattern.D[S.mode][k][mi];ev.forEach(e=>{row+=e[2]==null?rest(e[1]==16?mx+mw/2-7:mx+8+e[0]*uw,Y(k),e[1]):note(mx+14+e[0]*uw,Y(k),b,e)});
+    rests(ev).forEach(([u,d])=>row+=rest(d==16?mx+mw/2-7:mx+8+u*uw,Y(k),d))}}});
+  if(tb){const t=Y(1);for(let i=0;i<NT;i++)row+=ln(20,t+i*10,xe,t+i*10,.8);
+  row+=['T','A','B'].map((c,i)=>`<text x="34" y="${t+(NT-1)*5-8+i*14}" font-size="14" font-weight="700" text-anchor="middle">${c}</text>`).join('');
+  for(let j=0;j<count;j++){const mi=base+j,mx=80+j*mw;row+=ln(mx+mw,t,mx+mw,t+(NT-1)*10,mi==pattern.n-1?3:1);
+   pattern.D.mel[0][mi].forEach(e=>{if(e[2]==null)return;const q=pick(e);if(!q)return;const x=mx+14+e[0]*uw,y=t+(NT-1-q[1])*10;
+    row+=`<rect x="${x-7}" y="${y-8}" width="14" height="16" fill="#fff"/><text x="${x}" y="${y+5}" font-size="14" font-weight="700" text-anchor="middle">${q[0]}</text>`})}}
+  const ch=pattern.ch[S.mode]||{};
   for(const key in ch){const[a,u]=key.split(':').map(Number),r=a-base;
-   if(r>=0&&r<cnt&&Math.floor(r/per)==si)o+=`<text x="${80+(r%per)*mw+8+u*uw}" y="${Y(0)-28}" font-size="24" font-weight="700" font-family="'Comic Sans MS','Comic Neue','Chalkboard SE','Marker Felt',cursive">${esc(ch[key])}</text>`}
-  if(ns>1)o+=ln(xe,Y(0),xe,Y(1)+40,mi_end(si,per,cnt)?3:1)}
- if(S.showInk)(S.ink[S.mode]||[]).forEach(st=>{const r=st.m-base;if(r<0||r>=cnt)return;const mx=80+(r%per)*mw,sy=hy+Math.floor(r/per)*sh;
-  o+=`<path d="M${st.p.map(q=>(mx+q[0]).toFixed(1)+' '+(sy+q[1]).toFixed(1)).join('L')}" fill="none" stroke="#c0392b" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>`});
- const widthStyle=!ex&&S.pageWidth?`style="width:${W}px;max-width:none"`:'';
- return{s:`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${pageH}" width="${W}px" height="${pageH}px" ${widthStyle} font-family="'Noto Music','Apple Symbols','Segoe UI Symbol','Helvetica Neue',Arial,sans-serif"><rect width="${W}" height="${pageH}" fill="#fff"/><g id="score-content" transform="scale(${scale})">${o}</g></svg>`,W,H,pageW:W,pageH,scale}}
+  if(r>=0&&r<count)row+=`<text x="${80+r*mw+8+u*uw}" y="${Y(0)-28}" font-size="24" font-weight="700" font-family="'Comic Sans MS','Comic Neue','Chalkboard SE','Marker Felt',cursive">${esc(ch[key])}</text>`}
+  if(ns>1)row+=ln(xe,Y(0),xe,Y(1)+40,3);
+  if(S.showInk)(pattern.ink[S.mode]||[]).forEach(st=>{const r=st.m-base;if(r<0||r>=count)return;const mx=80+r*mw;
+  row+=`<path d="M${st.p.map(q=>(mx+q[0]).toFixed(1)+' '+(top+q[1]).toFixed(1)).join('L')}" fill="none" stroke="#c0392b" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>`});
+  o+=`<g id="pattern-content-${pattern.id}" data-pattern-id="${pattern.id}">${row}</g>`;
+ }
+ const widthStyle=!ex?`style="width:${W}px;max-width:none"`:'';
+ return{s:`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${pageH}" width="${W}px" height="${pageH}px" ${widthStyle} font-family="'Noto Music','Apple Symbols','Segoe UI Symbol','Helvetica Neue',Arial,sans-serif"><rect width="${W}" height="${pageH}" fill="#fff"/><g id="score-content">${o}</g></svg>`,W,H,pageW:W,pageH,scale:1}}
 const mi_end=(si,per,cnt)=>(si+1)*per>=cnt;
 function draw(){$('#sc').innerHTML=build(false).s}
 
 function ui(){
  document.documentElement.classList.toggle('draw-mode',S.tool=='d');
  $('#tabs').innerHTML=Object.entries(MODES).map(([k,v])=>`<button data-m="${k}" class="${S.mode==k?'on':''}">${v[0]}</button>`).join('');
+ const currentIndex=S.patterns.indexOf(P());
+ $('#patterns').innerHTML=`<div class="r pattern-controls"><select id="patternSelect" aria-label="Select pattern">${S.patterns.map((pattern,index)=>`<option value="${pattern.id}"${pattern.id===P().id?' selected':''}>${index+1}. ${esc(pattern.name)}</option>`).join('')}</select><input id="patternName" value="${esc(P().name)}" placeholder="Pattern name" aria-label="Pattern name"><span>${P().n} bars</span><button data-x="pat-add">+ Pattern</button><button data-x="pat-duplicate">Duplicate</button><button data-x="pat-up" aria-label="Move pattern up" title="Move pattern up"${currentIndex===0?' disabled':''}>↑</button><button data-x="pat-down" aria-label="Move pattern down" title="Move pattern down"${currentIndex===S.patterns.length-1?' disabled':''}>↓</button><button data-x="pat-delete"${S.patterns.length===1?' disabled':''}>Delete pattern</button></div>`;
+ $('#patternSelect').onchange=e=>{S.activePatternId=Number(e.target.value);go()};
+ $('#patternName').oninput=e=>{P().name=e.target.value;sv();draw();const option=$('#patternSelect').selectedOptions[0];if(option)option.textContent=`${currentIndex+1}. ${P().name}`};
  $('#pageWidth').value=S.pageWidth??'';
  const dr=S.mode=='drm',md=S.tool=='n'||S.tool=='r';
  $('#pal').innerHTML=dr?'':DUR.map(([d,n])=>`<button data-d="${d}" class="${S.d==d&&md?'on':''}">${n}</button>`).join('')+[[0,'♮'],[1,'♯'],[-1,'♭']].map(([a,t])=>`<button data-a="${a}" class="${S.acc==a?'on':''}">${t}</button>`).join('');
@@ -121,21 +153,20 @@ function ui(){
  msg(TH[S.tool]||HINT[S.mode])}
 
 const XY=e=>{const r=$('#sc svg').getBoundingClientRect(),k=G.W/r.width/G.scale;return[(e.clientX-r.left)*k,(e.clientY-r.top)*k]};
-const LOC=(x,y)=>{y-=G.hy;if(y<0||x<80)return;const si=Math.floor(y/G.sh),j=Math.floor((x-80)/G.mw),mi=G.base+si*G.per+j;if(si>=G.rows||j>=G.per||mi>=S.n)return;return{mi,yy:y-si*G.sh,mx:80+j*G.mw,sy:G.hy+si*G.sh}};
-const PLOC=(x,y)=>y<0?undefined:LOC(x,Math.max(y,G.hy));
+const LOC=(x,y)=>{const group=G.patterns.find(pattern=>y>=pattern.top&&y<pattern.top+pattern.rowHeight);if(!group||x<80||x>=G.W)return;const j=Math.floor((x-80)/group.mw);if(j<0||j>=group.count)return;return{patternId:group.id,group,mi:group.base+j,yy:y-group.top,mx:80+j*group.mw,sy:group.top}};
+const PLOC=(x,y)=>y<0?undefined:LOC(x,y<G.patterns[0].top?G.patterns[0].top:y);
 function tap(e){if(!$('#sc svg')||S.tool=='d')return;
- const[x,y]=XY(e);
- if(S.tool=='e'){const L=INK(),keep=L.filter(st=>{const r=st.m-G.base;if(r<0||r>=G.cnt)return true;const mx=80+(r%G.per)*G.mw,sy=G.hy+Math.floor(r/G.per)*G.sh;return!st.p.some(q=>Math.hypot(mx+q[0]-x,sy+q[1]-y)<14)});
-  if(keep.length<L.length){push();S.ink[S.mode]=keep;go()}return}
- const l=LOC(x,y);if(!l)return;S.cur=l.mi;const{mx,yy}=l;
- if(S.tool=='c'){push();const uq=Math.max(0,Math.min(12,Math.round((x-mx-14)/G.uw/4)*4)),key=l.mi+':'+uq,t=(S.cv||'').trim(),C=cc();
+ const[x,y]=XY(e),l=LOC(x,y);if(!l)return;S.activePatternId=l.patternId;P().cur=l.mi;const{mx,yy,group}=l;
+ if(S.tool=='e'){const L=INK(),keep=L.filter(st=>!st.p.some(q=>Math.hypot(80+(st.m-group.base)*group.mw+q[0]-x,group.top+q[1]-y)<14));
+  if(keep.length<L.length){push();P().ink[S.mode]=keep;go()}return}
+ if(S.tool=='c'){push();const uq=Math.max(0,Math.min(12,Math.round((x-mx-14)/group.uw/4)*4)),key=l.mi+':'+uq,t=(S.cv||'').trim(),C=cc();
   if(!t||C[key]==t)delete C[key];else C[key]=t;go();return}
  if(S.mode=='drm'){go();return}
- if(G.tb&&yy>120){const ev=S.D.mel[0][l.mi],u=(x-mx-14)/G.uw,q=ev.filter(z=>z[2]!=null).sort((a,b)=>Math.abs(a[0]-u)-Math.abs(b[0]-u))[0];
+ if(group.tb&&yy>150){const ev=P().D.mel[0][l.mi],u=(x-mx-14)/group.uw,q=ev.filter(z=>z[2]!=null).sort((a,b)=>Math.abs(a[0]-u)-Math.abs(b[0]-u))[0];
   if(q&&Math.abs(q[0]-u)<=1.5){const c=cand(q);if(c.length>1){push();q[4]=c[(c.indexOf(pick(q))+1)%c.length][1]}}go();return}
- const kk=G.ns>1&&yy>120?1:0,b=MODES[S.mode][1][kk],d=S.d;
- const n=S.tool=='r'?null:b+Math.max(-8,Math.min(16,Math.round((50+kk*100+40-yy)/5)));
- let u=Math.max(0,Math.min(15,Math.round((x-mx-14)/G.uw)));u-=u%d;if(u+d>16)u=16-d;
+ const kk=group.ns>1&&yy>180?1:0,b=MODES[S.mode][1][kk],d=S.d;
+ const n=S.tool=='r'?null:b+Math.max(-8,Math.min(16,Math.round((120+kk*100-yy)/5)));
+ let u=Math.max(0,Math.min(15,Math.round((x-mx-14)/group.uw)));u-=u%d;if(u+d>16)u=16-d;
  push();let ev=S.D[S.mode][kk][l.mi];const i=ev.findIndex(q=>q[0]==u&&q[1]==d&&q[2]===n);
  if(i>=0)ev.splice(i,1);
  else{ev=ev.filter(q=>!(q[0]<u+d&&u<q[0]+q[1])||(q[0]==u&&q[1]==d&&q[2]!=null&&n!=null));ev.push([u,d,n,S.acc]);S.D[S.mode][kk][l.mi]=ev}
@@ -148,10 +179,10 @@ sc.addEventListener('pointerup',e=>{const p=tapStart;tapStart=null;if(p&&!p.move
 sc.addEventListener('pointercancel',e=>{if(tapStart&&tapStart.id==e.pointerId)tapStart=null});
 let pen=null;
 sc.addEventListener('pointerdown',e=>{if(S.tool!='d'||e.pointerType=='touch'||!$('#sc svg'))return;const[x,y]=XY(e),l=PLOC(x,y);if(!l)return;
- e.preventDefault();sc.setPointerCapture(e.pointerId);pen={m:l.mi,mx:l.mx,sy:l.sy,p:[[+(x-l.mx).toFixed(1),+(y-l.sy).toFixed(1)]],el:document.createElementNS(NS,'path')};
- for(const[k,v]of Object.entries({fill:'none',stroke:'#c0392b','stroke-width':2.2,'stroke-linecap':'round'}))pen.el.setAttribute(k,v);$('#score-content').appendChild(pen.el)});
+ e.preventDefault();S.activePatternId=l.patternId;P().cur=l.mi;sc.setPointerCapture(e.pointerId);pen={patternId:l.patternId,m:l.mi,mx:l.mx,sy:l.sy,p:[[+(x-l.mx).toFixed(1),+(y-l.sy).toFixed(1)]],el:document.createElementNS(NS,'path')};
+ for(const[k,v]of Object.entries({fill:'none',stroke:'#c0392b','stroke-width':2.2,'stroke-linecap':'round'}))pen.el.setAttribute(k,v);$(`#pattern-content-${l.patternId}`).appendChild(pen.el)});
 sc.addEventListener('pointermove',e=>{if(!pen)return;const[x,y]=XY(e);pen.p.push([+(x-pen.mx).toFixed(1),+(y-pen.sy).toFixed(1)]);pen.el.setAttribute('d','M'+pen.p.map(q=>(pen.mx+q[0])+' '+(pen.sy+q[1])).join('L'))});
-sc.addEventListener('pointerup',()=>{if(!pen)return;const t=pen;pen=null;if(t.p.length<2)t.p.push([t.p[0][0]+.1,t.p[0][1]]);push();INK().push({m:t.m,p:t.p});go()});
+sc.addEventListener('pointerup',()=>{if(!pen)return;const t=pen;pen=null;if(t.p.length<2)t.p.push([t.p[0][0]+.1,t.p[0][1]]);push();const pattern=S.patterns.find(item=>item.id===t.patternId);(pattern.ink[S.mode]||(pattern.ink[S.mode]=[])).push({m:t.m,p:t.p});go()});
 const touchPoints=new Map();let touchPanY=null;
 const averageTouchY=()=>[...touchPoints.values()].reduce((sum,y)=>sum+y,0)/touchPoints.size;
 document.addEventListener('pointerdown',e=>{if(S.tool!='d'||e.pointerType!='touch')return;touchPoints.set(e.pointerId,e.clientY);touchPanY=touchPoints.size>=2?averageTouchY():null});
@@ -163,7 +194,7 @@ addEventListener('resize',draw);
 document.addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;const D=b.dataset;
  if(D.m){S.mode=D.m;S.cur=Math.min(S.cur,S.n-1);go()}
  else if(D.d){S.d=+D.d;if(S.tool!='r')S.tool='n';go()}
- else if(D.k){push();const l=+D.k;S.kit=S.kit.filter(x=>x!=l);S.D.drm[0]=S.D.drm[0].map(m=>m.filter(q=>q[2]!=l));go()}
+ else if(D.k){push();const l=+D.k;S.kit=S.kit.filter(x=>x!=l);S.patterns.forEach(pattern=>pattern.D.drm[0]=pattern.D.drm[0].map(m=>m.filter(q=>q[2]!=l)));go()}
  else if(D.a!==undefined){S.acc=+D.a;go()}
  else if(D.t){S.tool=D.t;go()}
  else if(D.g){push();const[l,u]=D.g.split(',').map(Number),ev=S.D.drm[0][S.cur],i=ev.findIndex(q=>q[0]==u&&q[2]==l);if(i>=0)ev.splice(i,1);else ev.push([u,1,l]);go()}
@@ -172,7 +203,7 @@ document.addEventListener('click',e=>{const b=e.target.closest('button');if(!b)r
 $('#ti').oninput=e=>{S.title=e.target.value;sv();draw()};
 $('#au').oninput=e=>{S.author=e.target.value;sv();draw()};
 $('#pageWidth').onchange=e=>{const width=pageWidthValue(e.target.value);if(width!==S.pageWidth)push();S.pageWidth=width;go()};
-$('#f').onchange=async e=>{const f=e.target.files[0];if(!f)return;try{const o=JSON.parse(await f.text());if(!o.D)throw 0;push();S=o;normalizePageWidth(S);$('#ti').value=S.title||'';$('#au').value=S.author||'';go()}catch(x){msg('That file is not a saved score.')}e.target.value=''};
+$('#f').onchange=async e=>{const f=e.target.files[0];if(!f)return;try{const o=JSON.parse(await f.text());if(!o.D&&!Array.isArray(o.patterns))throw 0;push();S=o;normalizeScore(S);$('#ti').value=S.title||'';$('#au').value=S.author||'';go()}catch(x){msg('That file is not a saved score.')}e.target.value=''};
 
 async function out(name,data){try{if(DL)await DL.save({filename:name,data});else{const a=document.createElement('a');a.href=URL.createObjectURL(data instanceof Blob?data:new Blob([data]));a.download=name;a.click()}}catch(e){if(!e||e.code!='declined')msg('Could not save: '+((e&&e.message)||e))}}
 async function cv(){const o=build(true),im=new Image();im.src='data:image/svg+xml;charset=utf-8,'+encodeURIComponent(o.s);await im.decode();
@@ -190,7 +221,11 @@ async function pdf(){const c=await cv(),jb=await new Promise(r=>c.toBlob(r,'imag
  add(en.encode(x+`trailer<</Size 6/Root 1 0 R>>\nstartxref\n${xr}\n%%EOF`));return new Blob(parts,{type:'application/pdf'})}
 
 async function act(x){const fn=(S.title||'score').replace(/[^\w-]+/g,'_');
- if(x=='add'){push();S.n++;go()}
+ if(x=='pat-add'){push();const pattern=makePattern(S.nextPatternId,`Pattern ${S.nextPatternId}`);S.nextPatternId++;S.patterns.splice(S.patterns.indexOf(P())+1,0,pattern);S.activePatternId=pattern.id;go()}
+ else if(x=='pat-duplicate'){push();const copy=JSON.parse(JSON.stringify(P()));copy.id=S.nextPatternId++;copy.name=`${copy.name||'Pattern'} copy`;copy.cur=0;S.patterns.splice(S.patterns.indexOf(P())+1,0,copy);S.activePatternId=copy.id;go()}
+ else if(x=='pat-delete'&&S.patterns.length>1){const pattern=P(),hasContent=Object.values(pattern.D).some(staves=>staves.some(measures=>measures.some(measure=>measure.length)))||Object.values(pattern.ch).some(chords=>Object.keys(chords).length)||Object.values(pattern.ink).some(strokes=>strokes.length);if(hasContent&&typeof window.confirm=='function'&&!window.confirm(`Delete "${pattern.name}" and its contents?`))return;push();const index=S.patterns.indexOf(pattern);S.patterns.splice(index,1);S.activePatternId=S.patterns[Math.max(0,index-1)].id;go()}
+ else if(x=='pat-up'||x=='pat-down'){const index=S.patterns.indexOf(P()),target=index+(x=='pat-up'?-1:1);if(target<0||target>=S.patterns.length)return;push();[S.patterns[index],S.patterns[target]]=[S.patterns[target],S.patterns[index]];go()}
+ else if(x=='add'){push();S.n++;go()}
  else if(x=='del'&&S.n>1){push();S.n--;S.cur=Math.min(S.cur,S.n-1);for(const m in S.ch)for(const k in S.ch[m])if(+k.split(':')[0]>=S.n)delete S.ch[m][k];for(const m in S.ink)S.ink[m]=S.ink[m].filter(t=>t.m<S.n);go()}
  else if(x=='undo'&&hist.length){S=JSON.parse(hist.pop());go()}
  else if(x=='clr'){push();S.D[S.mode]=S.D[S.mode].map(()=>[]);S.ch[S.mode]={};S.ink[S.mode]=[];go()}

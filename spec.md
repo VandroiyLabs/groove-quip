@@ -89,21 +89,28 @@ Priority: **P0** = required for the prototype, **P1** = next, **P2** = later.
 - **FR-ZOOM-2 (P1)** Pinch zoom and a fit-to-screen option (the drum reference app has "Fit screen" and "Full screen").
 
 ### 4.8 Layout and rendering (FR-RENDER)
-- **FR-RENDER-1 (P0)** The responsive layout shows 2 measures per row on phones, 3 on tablets, 4 on wide screens.
+- **FR-RENDER-1 (P0)** Each named pattern renders on its own horizontal score line. Its measures stay on that line at every viewport width; narrow screens use horizontal scrolling rather than wrapping or shrinking the notation.
 - **FR-RENDER-2 (P0)** Output includes title and author, clefs, 4/4 time signature, measure numbers, final barline.
 - **FR-RENDER-3 (P0)** Renderer is shared by all modes; each mode only supplies its own entry method.
 - **FR-RENDER-4 (P1)** Self-hosted music font (e.g. Noto Music) so clefs and glyphs render consistently offline and align correctly. The prototype relies on system fonts and clef alignment may vary by device.
 
-### 4.9 Export, save, load (FR-IO)
+### 4.9 Patterns (FR-PATTERN)
+- **FR-PATTERN-1 (P0)** A score contains one or more named patterns. Each pattern renders on its own line and retains independent measures, notes, chords, and pen annotations.
+- **FR-PATTERN-2 (P0)** New patterns start with 2 measures. Users can add or remove measures within each pattern.
+- **FR-PATTERN-3 (P0)** Patterns share the score's selected mode. Users can select, rename, duplicate, reorder, and delete patterns. Deleting a non-empty pattern requires confirmation; at least one pattern remains.
+- **FR-PATTERN-4 (P0)** Pattern names and line breaks appear in PNG/PDF exports.
+- **FR-PATTERN-5 (P0)** Existing saved scores open as one pattern named "Pattern 1" with their existing content preserved.
+
+### 4.10 Export, save, load (FR-IO)
 - **FR-IO-1 (P0)** Export the score as **PNG** and as **PDF** (the prototype produces a one-page PDF with the score as an image).
 - **FR-IO-2 (P0)** Save and open scores as JSON files using the current state format. A format-version field and compatibility with older formats are not required.
 - **FR-IO-3 (P0)** Autosave in the browser (local storage).
 - **FR-IO-4 (P1)** Vector PDF with real pagination, MusicXML export/import, MIDI export.
 
-### 4.10 Playback (FR-PLAY)
+### 4.11 Playback (FR-PLAY)
 Playback is **not a priority for now**. Playback requirements can be defined later if it becomes a priority.
 
-### 4.11 Sharing (FR-SHARE)
+### 4.12 Sharing (FR-SHARE)
 Link sharing is **not a priority for now**. Sharing requirements can be defined later if it becomes a priority.
 
 ---
@@ -116,7 +123,7 @@ Link sharing is **not a priority for now**. Sharing requirements can be defined 
   - `accidental`: 1 sharp, -1 flat, 0 natural.
   - Durations: 16, 8, 4, 2, 1.
 - Drum hit: `[startUnit, 1, laneIndex]`; lanes are indexes into the kit table (see FR-DRUM-3). The duration value `1` marks a grid onset, not necessarily the engraved note value; the renderer derives that value as specified in FR-DRUM-4.
-- Score state: title, author, mode, measure count, current measure, per-mode note data (melody: 1 staff; piano: 2 staves; drums: 1), per-mode chords keyed `"measure:unit"`, per-mode pen strokes `{measure, points relative to the measure}`, kit, tab setting, zoom flag, and annotation visibility.
+- Score state: title, author, mode, page width, active pattern ID, ordered patterns (each with name, measure count, current measure, per-mode note data (melody: 1 staff; piano: 2 staves; drums: 1), per-mode chords keyed `"measure:unit"`, and per-mode pen strokes `{measure, points relative to the measure}`), kit, tab setting, zoom flag, and annotation visibility.
 - Chords and pen strokes are stored per mode.
 
 ## 6. Non-functional requirements
