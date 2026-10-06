@@ -71,7 +71,7 @@ Priority: **P0** = required for the prototype, **P1** = next, **P2** = later.
 - **FR-CHORD-3 (P0)** Style: larger font than other text, placed noticeably above the top staff (extra padding from the staff lines), in a handwritten/Comic Sans style (`Comic Sans MS`, `Comic Neue`, `Chalkboard SE`, `Marker Felt`, cursive).
 
 ### 4.5 Pen annotations (FR-PEN)
-- **FR-PEN-1 (P0)** With the **Apple Pencil** (and mouse) the user can draw freehand annotations over the score. When Pen mode is active, scrolling anywhere on the page requires a two-finger pan; a single finger must not scroll the page. When Pen mode is inactive, normal one-finger page scrolling works. Two-finger scrolling while Pen mode is active is not implemented in the current prototype yet.
+- **FR-PEN-1 (P0)** With the **Apple Pencil** (and mouse) the user can draw freehand annotations over the score. When Pen mode is active, scrolling anywhere on the page requires a two-finger pan; a single finger must not scroll the page. When Pen mode is inactive, normal one-finger page scrolling works. Two-finger scrolling while Pen mode is active is implemented through pointer-event tracking.
 - **FR-PEN-2 (P0)** Annotations are **anchored to a measure** (stored relative to that measure), so they follow it when the layout reflows.
 - **FR-PEN-3 (P0)** An eraser tool removes a stroke by tapping near it.
 - **FR-PEN-4 (P0)** A Show/Hide Annotations control toggles annotations in the score and in PNG/PDF exports. Hiding annotations must not delete them; they remain in the saved score and reappear when shown again.
@@ -156,7 +156,7 @@ Differences wanted: Groove Quip is not drum-only, uses staff-tap entry for pitch
 - Very high notes may sit close to chord symbols.
 - Eighth and sixteenth rests are simplified shapes.
 - Pen strokes anchor to the measure where they start.
-- While Pen mode is active, two-finger page scrolling is not implemented yet; the current prototype only disables browser panning over the score.
+- While Pen mode is active, two-finger page scrolling uses pointer-event tracking; Pencil behavior still needs validation on a real iPad.
 - Tab assumes standard tuning and written pitch.
 - App logic remains in a single JavaScript file (`js/app.js`); an automated Node test suite exists, but real-iPad layout and Pencil behavior still need validation.
 - Mobile layout and Pencil feel are **untested on a real iPad** and are the first things to validate.

@@ -14,6 +14,7 @@ button.on{background:var(--ac);color:#fff}
 #sc{background:var(--panel);margin:4px 0;overflow-x:auto;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
 #sc svg{display:block;width:100%;height:auto;outline:1px solid #d1d5db;outline-offset:-1px}
 html.draw-mode{touch-action:none}
+html.draw-mode #sc,html.draw-mode #sc svg{touch-action:none}
 #g{padding:4px 12px}
 .drum-input-toggle{padding:0 0 8px}
 .drum-grid-nav{padding:0 0 6px}

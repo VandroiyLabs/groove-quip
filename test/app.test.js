@@ -9,6 +9,7 @@ const source = fs.readFileSync(path.join(__dirname, '..', 'js', 'app.js'), 'utf8
 function createApp(storedState = null) {
   const elements = new Map();
   const documentListeners = {};
+  const documentCaptureListeners = {};
   let drawCount = 0;
   let scrollY = 1000;
 
@@ -32,7 +33,9 @@ function createApp(storedState = null) {
     }
 
     dispatch(name, event) {
+      if (this.id === 'sc' && name.startsWith('pointer')) documentCaptureListeners[name]?.(event);
       for (const callback of this.listeners[name] || []) callback(event);
+      if (this.id === 'sc' && name.startsWith('pointer')) documentListeners[name]?.(event);
     }
 
     setPointerCapture() {}
@@ -65,8 +68,9 @@ function createApp(storedState = null) {
       if (selector === '#score-content' || selector.startsWith('#pattern-content-')) return {appendChild() {}};
       return elements.get(selector.slice(1)) || null;
     },
-    addEventListener(name, callback) {
-      documentListeners[name] = callback;
+    addEventListener(name, callback, options) {
+      const listeners = options === true || options?.capture ? documentCaptureListeners : documentListeners;
+      listeners[name] = callback;
     },
     documentElement: elements.get('html'),
     createElementNS: () => ({setAttribute() {}})
@@ -94,7 +98,10 @@ function createApp(storedState = null) {
     get drawCount() { return drawCount; },
     get scrollY() { return window.scrollY; },
     evaluate(expression) { return vm.runInContext(expression, sandbox); },
-    dispatchDocument(name, event) { documentListeners[name](event); },
+    dispatchDocument(name, event) {
+      documentCaptureListeners[name]?.(event);
+      documentListeners[name]?.(event);
+    },
     clickAction(action) {
       documentListeners.click({target: {closest: () => ({dataset: {x: action}})}});
     }
@@ -248,6 +255,33 @@ test('drum Pen mode records stylus strokes on the active pattern line', () => {
   assert.equal(app.evaluate('INK()[0].m'), 0);
 });
 
+test('drum Pen mode captures touch-reported Pencil strokes instead of scrolling', () => {
+  const app = createApp();
+  app.evaluate("S.mode = 'drm'; go()");
+  app.clickAction('dinput-pen');
+  const score = app.elements.get('sc');
+  let prevented = false;
+
+  score.dispatch('pointerdown', {pointerId: 1, pointerType: 'touch', clientX: 150, clientY: 150, preventDefault() {prevented = true}});
+  score.dispatch('pointermove', {pointerId: 1, pointerType: 'touch', clientX: 170, clientY: 165});
+  score.dispatch('pointerup', {pointerId: 1, pointerType: 'touch', clientX: 170, clientY: 165});
+
+  assert.equal(prevented, true);
+  assert.equal(app.evaluate('INK().length'), 1);
+  assert.equal(app.scrollY, 1000);
+  assert.match(fs.readFileSync(path.join(__dirname, '..', 'css', 'app.css'), 'utf8'), /html\.draw-mode\{touch-action:none\}/);
+});
+
+test('Pen mode prevents native touch scrolling when touch-action is ignored', () => {
+  const app = createApp();
+  app.evaluate("S.tool = 'd'; go()");
+  let prevented = false;
+
+  app.dispatchDocument('touchmove', {cancelable: true, preventDefault() {prevented = true}});
+
+  assert.equal(prevented, true);
+});
+
 test('two-finger pan scrolls away from the page bottom in pen mode', () => {
   const app = createApp();
   app.evaluate("S.tool = 'd'; go()");
@@ -261,6 +295,23 @@ test('two-finger pan scrolls away from the page bottom in pen mode', () => {
   app.dispatchDocument('pointerup', {pointerId: 2, pointerType: 'touch'});
   app.dispatchDocument('pointermove', {pointerId: 1, pointerType: 'touch', clientY: 680});
   assert.equal(app.scrollY, 960);
+});
+
+test('two-finger pan cancels an in-progress touch stroke in Pen mode', () => {
+  const app = createApp();
+  app.evaluate("S.mode = 'drm'; go()");
+  app.clickAction('dinput-pen');
+  const score = app.elements.get('sc');
+
+  score.dispatch('pointerdown', {pointerId: 1, pointerType: 'touch', clientX: 150, clientY: 150, preventDefault() {}});
+  score.dispatch('pointerdown', {pointerId: 2, pointerType: 'touch', clientX: 170, clientY: 150, preventDefault() {}});
+  score.dispatch('pointermove', {pointerId: 1, pointerType: 'touch', clientX: 160, clientY: 170});
+  score.dispatch('pointermove', {pointerId: 2, pointerType: 'touch', clientX: 180, clientY: 170});
+
+  assert.equal(app.scrollY, 980);
+  score.dispatch('pointerup', {pointerId: 1, pointerType: 'touch'});
+  score.dispatch('pointerup', {pointerId: 2, pointerType: 'touch'});
+  assert.equal(app.evaluate('INK().length'), 0);
 });
 
 test('pen strokes may start in the space above the staff', () => {
