@@ -57,15 +57,28 @@ function go(){bindPatternAccessors();fit();sv();ui();draw()}
 function rests(ev){const o=Array(16).fill(0);ev.forEach(e=>{for(let i=e[0];i<e[0]+e[1];i++)o[i]=1});const r=[];let u=0;
  while(u<16){if(o[u]){u++;continue}let s=16;while(s>1&&(u%s||u+s>16||o.slice(u,u+s).some(x=>x)))s/=2;r.push([u,s]);u+=s}return r}
 
-function note(x,y0,b,e){const[,d,n,a]=e,m=n-b,y=y0+40-m*5;let s='';
+function note(x,y0,b,e,beamed=false){const[,d,n,a]=e,m=n-b,y=y0+40-m*5;let s='';
  for(let l=-2;l>=m;l-=2)s+=ln(x-9,y0+40-l*5,x+9,y0+40-l*5);
  for(let l=10;l<=m;l+=2)s+=ln(x-9,y0+40-l*5,x+9,y0+40-l*5);
  s+=`<ellipse cx="${x}" cy="${y}" rx="6" ry="4.5" transform="rotate(-20 ${x} ${y})" fill="${d>=8?'#fff':'#111'}" stroke="#111" stroke-width="1.4"/>`;
  if(a)s+=`<text x="${x-18}" y="${y+5}" font-size="16">${a>0?'♯':'♭'}</text>`;
  if(d<16){const up=m<4,f=up?1:-1,sx=x+(up?5.6:-5.6),ey=y+f*-33;s+=ln(sx,y,sx,ey,1.2);
-  if(d<=2){s+=`<path d="M${sx} ${ey}c0 ${8*f} 9 ${10*f} 7 ${20*f}" stroke="#111" stroke-width="1.8" fill="none"/>`;
+  if(d<=2&&!beamed){s+=`<path d="M${sx} ${ey}c0 ${8*f} 9 ${10*f} 7 ${20*f}" stroke="#111" stroke-width="1.8" fill="none"/>`;
    if(d==1)s+=`<path d="M${sx} ${ey+7*f}c0 ${8*f} 9 ${10*f} 7 ${20*f}" stroke="#111" stroke-width="1.8" fill="none"/>`}}
  return s}
+
+function noteStem(e,b,mx,uw,y0){const x=mx+14+e[0]*uw,m=e[2]-b,y=y0+40-m*5,up=m<4;return{x:x+(up?5.6:-5.6),y:y+(up?-33:33),up}}
+function beamNotes(ev,mx,uw,b,y0){const at=Array.from({length:16},()=>[]);ev.forEach(e=>{if(Number.isInteger(e[0])&&e[0]>=0&&e[0]<16)at[e[0]].push(e)});const events=new Set;let svg='';
+ const drawGroup=group=>{if(group.length<2)return;const stems=group.map(e=>noteStem(e,b,mx,uw,y0)),up=stems[0].up;
+  svg+=ln(stems[0].x,stems[0].y,stems[stems.length-1].x,stems[stems.length-1].y,3);group.forEach(e=>events.add(e));
+  for(let i=0;i<group.length;i++){if(group[i][1]!==1)continue;let end=i;while(end+1<group.length&&group[end+1][1]===1&&group[end+1][0]===group[end][0]+1)end++;
+   const offset=up?5:-5;if(end>i){svg+=ln(stems[i].x,stems[i].y+offset,stems[end].x,stems[end].y+offset,3);i=end}
+   else{const side=i>0?-1:1;svg+=ln(stems[i].x+(side<0?-10:0),stems[i].y+offset,stems[i].x+(side>0?10:0),stems[i].y+offset,3)}}};
+ for(let beat=0;beat<16;beat+=4){let group=[],unit=beat;const flush=()=>{drawGroup(group);group=[]};
+  while(unit<beat+4){const onset=at[unit]||[],event=onset.length===1?onset[0]:null,duration=event&&event[1],valid=event&&(duration===1||duration===2)&&event[2]!=null&&unit+duration<=beat+4;
+   if(valid){const stem=noteStem(event,b,mx,uw,y0),last=group[group.length-1];if(last&&(last[0]+last[1]!==unit||noteStem(last,b,mx,uw,y0).up!==stem.up))flush();group.push(event);unit+=duration}
+   else{flush();const span=onset.reduce((largest,item)=>Math.max(largest,Number(item[1])||1),1);unit+=Math.min(span,beat+4-unit)}}flush()}
+ return{events,svg}}
 
 function rest(x,y0,d){return d==16?`<rect x="${x}" y="${y0+10}" width="14" height="5"/>`:d==8?`<rect x="${x}" y="${y0+15}" width="14" height="5"/>`:
  d==4?`<path d="M${x+2} ${y0+9}l8 8-8 8 8 8" stroke="#111" stroke-width="2.4" fill="none"/>`:
@@ -110,7 +123,7 @@ function build(ex){
   for(let j=0;j<count;j++){const mi=base+j,mx=80+j*mw;
    row+=ln(mx+mw,Y(k),mx+mw,Y(k)+40,mi==pattern.n-1?3:1);
    if(S.mode=='drm'){if(!ex&&pattern.id===S.activePatternId&&mi===pattern.cur)row+=`<rect x="${mx}" y="${Y(0)-38}" width="${mw}" height="112" fill="#3b82f6" opacity=".1"/>`;row+=drums(pattern.D.drm[0][mi],mx,Y(0),uw)}
-   else{const ev=pattern.D[S.mode][k][mi];ev.forEach(e=>{row+=e[2]==null?rest(e[1]==16?mx+mw/2-7:mx+8+e[0]*uw,Y(k),e[1]):note(mx+14+e[0]*uw,Y(k),b,e)});
+    else{const ev=pattern.D[S.mode][k][mi],beam=beamNotes(ev,mx,uw,b,Y(k));ev.forEach(e=>{row+=e[2]==null?rest(e[1]==16?mx+mw/2-7:mx+8+e[0]*uw,Y(k),e[1]):note(mx+14+e[0]*uw,Y(k),b,e,beam.events.has(e))});row+=beam.svg;
     rests(ev).forEach(([u,d])=>row+=rest(d==16?mx+mw/2-7:mx+8+u*uw,Y(k),d))}}});
   if(tb){const t=Y(1);for(let i=0;i<NT;i++)row+=ln(20,t+i*10,xe,t+i*10,.8);
   row+=['T','A','B'].map((c,i)=>`<text x="34" y="${t+(NT-1)*5-8+i*14}" font-size="14" font-weight="700" text-anchor="middle">${c}</text>`).join('');

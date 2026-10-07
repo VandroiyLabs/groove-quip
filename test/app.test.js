@@ -167,6 +167,35 @@ test('page width defaults to 8 inches and supports 5–15 inch overrides', () =>
   assert.match(widePage, /<ellipse cx="94" cy="188" rx="6" ry="4\.5"/);
 });
 
+test('pitched eighth notes beam in pairs within beats', () => {
+  const app = createApp();
+  app.evaluate('S.D.mel[0][0].push([0, 2, 2, 0], [2, 2, 3, 0], [4, 2, 4, 0], [6, 2, 5, 0])');
+  const svg = app.evaluate('build(true).s');
+
+  assert.match(svg, /M99\.6 145L163\.35 140/);
+  assert.match(svg, /M227\.1 135L290\.85 130/);
+  assert.doesNotMatch(svg, /c0 8 9 10 7 20/);
+});
+
+test('pitched eighth notes do not beam across beat boundaries', () => {
+  const app = createApp();
+  app.evaluate('S.D.mel[0][0].push([2, 2, 2, 0], [4, 2, 3, 0])');
+  const svg = app.evaluate('build(true).s');
+
+  assert.doesNotMatch(svg, /M163\.35 145L227\.1 140/);
+  assert.equal((svg.match(/c0 8 9 10 7 20/g) || []).length, 2);
+});
+
+test('pitched eighth and sixteenth notes beam together within a beat', () => {
+  const app = createApp();
+  app.evaluate('S.D.mel[0][0].push([8, 2, -1, 0], [10, 1, 2, 0], [11, 1, 3, 0])');
+  const svg = app.evaluate('build(true).s');
+
+  assert.match(svg, /M354\.6 160L450\.225 140/);
+  assert.match(svg, /M418\.35 150L450\.225 145/);
+  assert.doesNotMatch(svg, /c0 8 9 10 7 20/);
+});
+
 test('legacy scores migrate into one named pattern without losing score data', () => {
   const legacy = {
     title: 'Old score',
