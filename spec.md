@@ -51,7 +51,7 @@ Priority: **P0** = required for the prototype, **P1** = next, **P2** = later.
 - **FR-ENTRY-5 (P0)** Notes of the same start and length but different pitch stack into a chord. A new note overwrites any overlapping notes of other lengths.
 - **FR-ENTRY-6 (P0)** Undo (at least 40 steps).
 - **FR-ENTRY-7 (P0)** Add and delete measures. Clear the current mode.
-- **FR-ENTRY-8 (P1)** Copy and duplicate a measure (the drum reference app has this).
+- **FR-ENTRY-8 (P1)** Duplicate the selected measure immediately after it, and move measures earlier or later within the pattern. Duplicating or moving a measure carries its notes, chords, and pen annotations across all modes.
 - **FR-ENTRY-9 (P1)** Dotted notes, ties, triplets, key signatures, time signatures other than 4/4, beaming.
 
 ### 4.2 Rests (FR-REST)
@@ -91,7 +91,7 @@ Priority: **P0** = required for the prototype, **P1** = next, **P2** = later.
 - **FR-ZOOM-2 (P1)** Pinch zoom and a fit-to-screen option (the drum reference app has "Fit screen" and "Full screen").
 
 ### 4.8 Layout and rendering (FR-RENDER)
-- **FR-RENDER-1 (P0)** Each named pattern renders on its own horizontal score line. Its measures stay on that line at every viewport width; narrow screens use horizontal scrolling rather than wrapping or shrinking the notation.
+- **FR-RENDER-1 (P0)** Each named pattern renders on one or more horizontal score lines. A configurable maximum number of measures per line (default 4) keeps measures readable; overflow continues on the next line without shrinking measures. Narrow screens use horizontal scrolling rather than wrapping or shrinking the notation.
 - **FR-RENDER-2 (P0)** Output includes title and author, clefs, 4/4 time signature, measure numbers, final barline.
 - **FR-RENDER-3 (P0)** Renderer is shared by all modes; each mode only supplies its own entry method.
 - **FR-RENDER-4 (P1)** Self-hosted music font (e.g. Noto Music) so clefs and glyphs render consistently offline and align correctly. The prototype relies on system fonts and clef alignment may vary by device.

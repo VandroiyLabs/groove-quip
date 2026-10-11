@@ -51,7 +51,7 @@ function createApp(storedState = null) {
     }
   }
 
-  for (const id of ['html', 'tabs', 'pal', 'tl', 'g', 'sc', 'h', 'ti', 'au', 'f', 'pageWidth', 'patterns', 'patternSelect', 'patternName']) {
+  for (const id of ['html', 'tabs', 'pal', 'tl', 'g', 'sc', 'h', 'ti', 'au', 'f', 'pageWidth', 'measuresPerLine', 'patterns', 'patternSelect', 'patternName', 'measureEarlier', 'measureLater', 'measureLabel']) {
     elements.set(id, new Element(id));
   }
 
@@ -170,6 +170,35 @@ test('page width defaults to 8 inches and supports 5–15 inch overrides', () =>
   assert.match(widePage, /<ellipse cx="94" cy="188" rx="6" ry="4\.5"/);
 });
 
+test('measure line limit defaults to four and wraps overflow without narrowing measures', () => {
+  const app = createApp();
+  const control = app.elements.get('measuresPerLine');
+  assert.equal(app.evaluate('S.measuresPerLine'), 4);
+  for (let i = 0; i < 3; i++) app.clickAction('add');
+  const defaultLayout = app.evaluate('build(false).s');
+  assert.match(defaultLayout, /data-first-measure="1" data-measure-count="4"/);
+  assert.match(defaultLayout, /data-first-measure="5" data-measure-count="1"/);
+
+  control.value = '2';
+  control.onchange({target: control});
+  assert.equal(app.evaluate('S.measuresPerLine'), 2);
+  assert.equal(control.value, 2);
+  const wrapped = app.evaluate('build(false).s');
+  assert.match(wrapped, /data-first-measure="1" data-measure-count="2"/);
+  assert.match(wrapped, /data-first-measure="3" data-measure-count="2"/);
+  assert.match(wrapped, /data-first-measure="5" data-measure-count="1"/);
+  assert.match(wrapped, /<path d="M20 316L1160 316" stroke="#111"/);
+  assert.match(wrapped, /<path d="M620 316L620 356" stroke="#111"/);
+  assert.equal(app.evaluate('LOC(100, 330).mi'), 2);
+
+  control.value = '0';
+  control.onchange({target: control});
+  assert.equal(app.evaluate('S.measuresPerLine'), 4);
+  control.value = '20';
+  control.onchange({target: control});
+  assert.equal(app.evaluate('S.measuresPerLine'), 8);
+});
+
 test('pitched eighth notes beam in pairs within beats', () => {
   const app = createApp();
   app.evaluate('S.D.mel[0][0].push([0, 2, 2, 0], [2, 2, 3, 0], [4, 2, 4, 0], [6, 2, 5, 0])');
@@ -224,6 +253,7 @@ test('legacy scores migrate into one named pattern without losing score data', (
   assert.equal(app.evaluate('P().name'), 'Pattern 1');
   assert.equal(app.evaluate('P().n'), 3);
   assert.equal(app.evaluate('P().cur'), 1);
+  assert.equal(app.evaluate('S.measuresPerLine'), 4);
   assert.deepEqual(JSON.parse(JSON.stringify(app.evaluate('P().D.mel[0][0]'))), [[0, 4, 2, 1]]);
   assert.equal(app.evaluate("P().ch.mel['1:0']"), 'Am');
   assert.equal(app.evaluate('P().ink.mel.length'), 1);
@@ -270,6 +300,56 @@ test('patterns isolate measures and support naming, duplication, ordering, and d
   app.clickAction('pat-delete');
   assert.equal(app.evaluate('S.patterns.length'), 2);
   assert.equal(app.evaluate('P().name'), 'Pattern 1');
+});
+
+test('measures duplicate after the selection and move with all modes, chords, and annotations', () => {
+  const app = createApp();
+  app.evaluate(`
+    P().D.mel[0][0].push([0, 4, 2, 0]);
+    P().D.pia[1][0].push([4, 2, 3, 0]);
+    P().D.drm[0][0].push([8, 1, 4]);
+    P().D.mel[0][1].push([2, 4, 4, 1]);
+    P().ch.mel = {'0:0': 'Am', '1:4': 'G'};
+    P().ch.pia = {'0:4': 'C'};
+    P().ink.mel = [{m: 0, p: [[10, 20], [12, 22]]}, {m: 1, p: [[30, 40], [32, 42]]}];
+    P().ink.drm = [{m: 0, p: [[50, 60], [52, 62]]}];
+    go()
+  `);
+  app.clickAction('add');
+  app.clickAction('prev');
+
+  assert.equal(app.elements.get('measureLabel').textContent, 'Measure 1 of 3');
+  assert.equal(app.elements.get('measureEarlier').disabled, true);
+  assert.equal(app.elements.get('measureLater').disabled, false);
+  app.clickAction('duplicate-measure');
+
+  assert.equal(app.evaluate('P().n'), 4);
+  assert.equal(app.evaluate('P().cur'), 1);
+  assert.deepEqual(JSON.parse(JSON.stringify(app.evaluate('P().D.mel[0][0]'))), [[0, 4, 2, 0]]);
+  assert.deepEqual(JSON.parse(JSON.stringify(app.evaluate('P().D.mel[0][1]'))), [[0, 4, 2, 0]]);
+  assert.deepEqual(JSON.parse(JSON.stringify(app.evaluate('P().D.mel[0][2]'))), [[2, 4, 4, 1]]);
+  assert.deepEqual(JSON.parse(JSON.stringify(app.evaluate('P().D.pia[1][1]'))), [[4, 2, 3, 0]]);
+  assert.deepEqual(JSON.parse(JSON.stringify(app.evaluate('P().D.drm[0][1]'))), [[8, 1, 4]]);
+  assert.deepEqual(JSON.parse(JSON.stringify(app.evaluate("[P().ch.mel['0:0'], P().ch.mel['1:0'], P().ch.mel['2:4'], P().ch.pia['1:4']]"))), ['Am', 'Am', 'G', 'C']);
+  assert.deepEqual(JSON.parse(JSON.stringify(app.evaluate('P().ink.mel.map(stroke => stroke.m)'))), [0, 2, 1]);
+  assert.deepEqual(JSON.parse(JSON.stringify(app.evaluate('P().ink.drm.map(stroke => stroke.m)'))), [0, 1]);
+  assert.equal(app.elements.get('measureLabel').textContent, 'Measure 2 of 4');
+
+  app.clickAction('measure-later');
+  assert.equal(app.evaluate('P().cur'), 2);
+  assert.deepEqual(JSON.parse(JSON.stringify(app.evaluate('P().D.mel[0][2]'))), [[0, 4, 2, 0]]);
+  assert.equal(app.evaluate("P().ch.mel['2:0']"), 'Am');
+  assert.deepEqual(JSON.parse(JSON.stringify(app.evaluate('P().ink.mel.map(stroke => stroke.m)'))), [0, 1, 2]);
+  app.clickAction('measure-earlier');
+  assert.equal(app.evaluate('P().cur'), 1);
+  app.clickAction('undo');
+  assert.equal(app.evaluate('P().cur'), 2);
+  assert.equal(app.elements.get('measureLabel').textContent, 'Measure 3 of 4');
+
+  app.evaluate('P().cur = 0; go()');
+  app.clickAction('measure-earlier');
+  assert.equal(app.evaluate('P().cur'), 0);
+  assert.equal(app.elements.get('measureEarlier').disabled, true);
 });
 
 test('pen mode records stylus strokes and disables browser panning on the score', () => {

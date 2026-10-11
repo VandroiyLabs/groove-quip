@@ -2,9 +2,11 @@ const $=s=>document.querySelector(s);
 const MODES={mel:['Melody',[2]],pia:['Piano',[2,-10]],drm:['Drums',[0]]};
 const DUR=[[16,'Whole'],[8,'Half'],[4,'Quarter'],[2,'Eighth'],[1,'16th']];
 const DEFAULT_PAGE_WIDTH=8;
+const DEFAULT_MEASURES_PER_LINE=4;
 const PAGE_UNITS_PER_IN=1170/DEFAULT_PAGE_WIDTH;
 const pageWidthValue=value=>{const width=Number(value);return Number.isFinite(width)&&width!==0?Math.round(Math.min(15,Math.max(5,width))*10)/10:DEFAULT_PAGE_WIDTH};
 const normalizePageWidth=score=>{score.pageWidth=pageWidthValue(score.pageWidth)};
+const measuresPerLineValue=value=>{const count=Number(value);return Number.isFinite(count)&&count>0?Math.max(1,Math.min(8,Math.round(count))):DEFAULT_MEASURES_PER_LINE};
 const LN=[['Hi-hat',9,1,1],['Crash',10,1,1],['Ride',8,1,1],['Tom',7,0,0],['Snare',5,0,0],['Floor tom',3,0,0],['Kick',1,0,0]];
 const TUN={g:{o:[-8,-3,2,7,11,16]},b:{o:[-20,-15,-10,-5]}};
 const DRUM_ARTICULATIONS={0:['open','pedal'],4:['ghost']};
@@ -16,7 +18,7 @@ const KEYBOARD_BLACK={C:'C#',D:'D#',F:'F#',G:'G#',A:'A#'};
 const TH={c:'Type a chord, then tap where it starts. Tap the same spot with the same chord to remove it.',d:'Draw with a stylus. To scroll while drawing, use a finger outside the score.',e:'Tap a pen mark to erase it.',k:'Select a piano key to place a note at the current duration.',r:'Tap to place a rest at the chosen length.'};
 const makeData=n=>({mel:[Array.from({length:n},()=>[])],pia:[Array.from({length:n},()=>[]),Array.from({length:n},()=>[])],drm:[Array.from({length:n},()=>[])]});
 const makePattern=(id,name,n=2)=>({id,name,n,cur:0,D:makeData(n),ch:{},ink:{}});
-const fresh=()=>({title:'Untitled',author:'',pageWidth:DEFAULT_PAGE_WIDTH,mode:'mel',activePatternId:1,nextPatternId:2,patterns:[makePattern(1,'Pattern 1')],d:4,acc:0,tool:'k',dinput:'grid',drumSingleVoice:false,drumSingleVoiceUp:false,showInk:true,cv:'C',z:0,tab:'',kit:[0,4,6],keyboardOctave:4});
+const fresh=()=>({title:'Untitled',author:'',pageWidth:DEFAULT_PAGE_WIDTH,measuresPerLine:DEFAULT_MEASURES_PER_LINE,mode:'mel',activePatternId:1,nextPatternId:2,patterns:[makePattern(1,'Pattern 1')],d:4,acc:0,tool:'k',dinput:'grid',drumSingleVoice:false,drumSingleVoiceUp:false,showInk:true,cv:'C',z:0,tab:'',kit:[0,4,6],keyboardOctave:4});
 let S,G={},hist=[],DL=null;
 try{S=JSON.parse(localStorage.getItem('ns1'))}catch(e){}
 if(!S||(!S.D&&!Array.isArray(S.patterns)))S=fresh();
@@ -40,7 +42,7 @@ const normalizeScore=score=>{
  if(!score.kit){score.kit=[0,4,6];score.patterns.forEach(pattern=>(pattern.D.drm[0]||[]).forEach(measure=>measure.forEach(event=>event[2]=[0,4,6][event[2]])))}
  score.mode=score.mode||'mel';score.drumSingleVoice=score.drumSingleVoice===true;score.drumSingleVoiceUp=score.drumSingleVoiceUp===true;score.activePatternId=score.patterns.some(pattern=>pattern.id===Number(score.activePatternId))?Number(score.activePatternId):score.patterns[0].id;
  score.nextPatternId=Math.max(1,...score.patterns.map(pattern=>pattern.id))+1;
- normalizePageWidth(score);score.tab=score.tab||'';score.z=score.z||0;score.dinput=score.dinput||'grid';score.showInk=score.showInk!==false;score.keyboardOctave=Number.isFinite(Number(score.keyboardOctave))?Math.max(0,Math.min(9,Number(score.keyboardOctave))):4;
+ normalizePageWidth(score);score.measuresPerLine=measuresPerLineValue(score.measuresPerLine);score.tab=score.tab||'';score.z=score.z||0;score.dinput=score.dinput||'grid';score.showInk=score.showInk!==false;score.keyboardOctave=Number.isFinite(Number(score.keyboardOctave))?Math.max(0,Math.min(9,Number(score.keyboardOctave))):4;
 };
 normalizeScore(S);
 const P=()=>S.patterns.find(pattern=>pattern.id===S.activePatternId)||S.patterns[0];
@@ -175,13 +177,24 @@ function drums(ev,mx,y0,uw,singleVoice=false,singleVoiceUp=false){let s='';const
 function build(ex){
  const foc=!ex&&S.z,W=Math.round(S.pageWidth*PAGE_UNITS_PER_IN);
  const tb=S.mode=='mel'&&S.tab,NT=tb?TUN[S.tab].o.length:0,SL=MODES[S.mode][1],ns=SL.length,sh=ns+(tb?1:0)>1?250:140,hy=56,rowGap=38;
- let y=hy;const groups=S.patterns.map(pattern=>{const zoom=foc&&pattern.id===S.activePatternId,base=zoom?pattern.cur:0,count=zoom?1:pattern.n,mw=(W-90)/count,uw=(mw-30)/16,group={id:pattern.id,pattern,base,count,top:y,staffTop:y+32,mw,uw,sh,ns,tb,rowHeight:sh+rowGap};y+=group.rowHeight;return group});
+ let y=hy;const groups=[];
+ for(const pattern of S.patterns){
+  const zoom=foc&&pattern.id===S.activePatternId,total=zoom?1:pattern.n,lineCapacity=zoom?1:Math.min(total,S.measuresPerLine),patternGroups=[];
+  for(let base=zoom?pattern.cur:0;base<(zoom?pattern.cur+1:pattern.n);base+=lineCapacity){
+   const count=Math.min(lineCapacity,(zoom?pattern.cur+1:pattern.n)-base),mw=(W-90)/lineCapacity,uw=(mw-30)/16;
+   const group={id:pattern.id,pattern,base,count,top:y,staffTop:y+32,mw,uw,sh,ns,tb,rowHeight:sh+rowGap,first:patternGroups.length===0};
+   groups.push(group);patternGroups.push(group);y+=group.rowHeight;
+  }
+ }
  const H=y+10,pageH=H;
  if(!ex)G={W,scale:1,patterns:groups};
  let o=`<text x="${W/2}" y="34" font-size="24" font-weight="700" text-anchor="middle">${esc(S.title)}</text><text x="12" y="50" font-size="13" text-anchor="start" fill="#555">${esc(S.author)}</text>`;
- for(const group of groups){
-  const{pattern,base,count,top,staffTop,mw,uw}=group,xe=80+count*mw,Y=k=>staffTop+50+k*100,bot=tb?Y(1)+(NT-1)*10:Y(ns-1)+40;
-  let row=`<text x="12" y="${top+28}" font-size="22" font-weight="700" fill="#2563eb">${esc(pattern.name)}</text><path d="M12 ${top+38}H40" stroke="#3b82f6" stroke-width="3" stroke-linecap="round"/>`;
+ for(const pattern of S.patterns){
+  const patternGroups=groups.filter(group=>group.id===pattern.id),lastGroup=patternGroups[patternGroups.length-1];
+  let patternRows='';
+  for(const group of patternGroups){
+  const{base,count,top,staffTop,mw,uw}=group,xe=80+count*mw,Y=k=>staffTop+50+k*100,bot=tb?Y(1)+(NT-1)*10:Y(ns-1)+40;
+  let row=group.first?`<text x="12" y="${top+28}" font-size="22" font-weight="700" fill="#2563eb">${esc(pattern.name)}</text><path d="M12 ${top+38}H40" stroke="#3b82f6" stroke-width="3" stroke-linecap="round"/>`:'';
   row+=ln(20,Y(0),20,bot,1.5)+`<text x="24" y="${Y(0)-12}" font-size="10" fill="#888">${base+1}</text>`;
   SL.forEach((b,k)=>{
   for(let i=0;i<5;i++)row+=ln(20,Y(k)+i*10,xe,Y(k)+i*10,.8);
@@ -204,8 +217,10 @@ function build(ex){
   if(ns>1)row+=ln(xe,Y(0),xe,Y(1)+40,3);
   if(S.showInk)(pattern.ink[S.mode]||[]).forEach(st=>{const r=st.m-base;if(r<0||r>=count)return;const mx=80+r*mw;
   row+=`<path d="M${st.p.map(q=>(mx+q[0]).toFixed(1)+' '+(top+q[1]).toFixed(1)).join('L')}" fill="none" stroke="#c0392b" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>`});
-  o+=`<g id="pattern-content-${pattern.id}" data-pattern-id="${pattern.id}">${row}</g>`;
-  if(groups[groups.length-1]!==group)o+=`<path d="M12 ${top+sh+rowGap/2}H${W-12}" stroke="#d7dce3" stroke-width="1"/>`;
+  patternRows+=`<g class="score-line" data-first-measure="${base+1}" data-measure-count="${count}">${row}</g>`;
+  }
+  o+=`<g id="pattern-content-${pattern.id}" data-pattern-id="${pattern.id}">${patternRows}</g>`;
+  if(pattern!==S.patterns[S.patterns.length-1])o+=`<path d="M12 ${lastGroup.top+sh+rowGap/2}H${W-12}" stroke="#d7dce3" stroke-width="1"/>`;
  }
  const widthStyle=!ex?`style="width:${W}px;max-width:none"`:'';
  return{s:`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${pageH}" width="${W}px" height="${pageH}px" ${widthStyle} font-family="'Noto Music','Apple Symbols','Segoe UI Symbol','Helvetica Neue',Arial,sans-serif"><rect width="${W}" height="${pageH}" fill="#fff"/><g id="score-content">${o}</g></svg>`,W,H,pageW:W,pageH,scale:1}}
@@ -219,7 +234,11 @@ function ui(){
  $('#patterns').innerHTML=`<div class="r pattern-controls"><select id="patternSelect" aria-label="Select pattern">${S.patterns.map((pattern,index)=>`<option value="${pattern.id}"${pattern.id===P().id?' selected':''}>${index+1}. ${esc(pattern.name)}</option>`).join('')}</select><input id="patternName" value="${esc(P().name)}" placeholder="Pattern name" aria-label="Pattern name"><span>${P().n} bars</span><button data-x="pat-add">+ Pattern</button><button data-x="pat-duplicate">Duplicate</button><button data-x="pat-up" aria-label="Move pattern up" title="Move pattern up"${currentIndex===0?' disabled':''}>↑</button><button data-x="pat-down" aria-label="Move pattern down" title="Move pattern down"${currentIndex===S.patterns.length-1?' disabled':''}>↓</button><button data-x="pat-delete"${S.patterns.length===1?' disabled':''}>Delete pattern</button></div>`;
  $('#patternSelect').onchange=e=>{S.activePatternId=Number(e.target.value);go()};
  $('#patternName').oninput=e=>{P().name=e.target.value;sv();draw();const option=$('#patternSelect').selectedOptions[0];if(option)option.textContent=`${currentIndex+1}. ${P().name}`};
+ $('#measureEarlier').disabled=P().cur===0;
+ $('#measureLater').disabled=P().cur===P().n-1;
+ $('#measureLabel').textContent=`Measure ${P().cur+1} of ${P().n}`;
  $('#pageWidth').value=S.pageWidth??'';
+ $('#measuresPerLine').value=S.measuresPerLine;
  const dr=S.mode=='drm',md=S.tool=='n'||S.tool=='r';
  const keyboardMode=S.tool=='k'&&S.mode!='drm';
  $('#pal').innerHTML=dr?'':DUR.map(([d,n])=>`<button data-d="${d}" class="${S.d==d&&(md||keyboardMode)?'on':''}">${n}</button>`).join('')+[[0,'♮'],[1,'♯'],[-1,'♭']].map(([a,t])=>`<button data-a="${a}" class="${S.acc==a?'on':''}">${t}</button>`).join('');
@@ -308,6 +327,7 @@ document.addEventListener('click',e=>{const b=e.target.closest('button');if(!b)r
 $('#ti').oninput=e=>{S.title=e.target.value;sv();draw()};
 $('#au').oninput=e=>{S.author=e.target.value;sv();draw()};
 $('#pageWidth').onchange=e=>{const width=pageWidthValue(e.target.value);if(width!==S.pageWidth)push();S.pageWidth=width;go()};
+$('#measuresPerLine').onchange=e=>{const count=measuresPerLineValue(e.target.value);if(count!==S.measuresPerLine)push();S.measuresPerLine=count;go()};
 $('#f').onchange=async e=>{const f=e.target.files[0];if(!f)return;try{const o=JSON.parse(await f.text());if(!o.D&&!Array.isArray(o.patterns))throw 0;push();S=o;normalizeScore(S);$('#ti').value=S.title||'';$('#au').value=S.author||'';go()}catch(x){msg('That file is not a saved score.')}e.target.value=''};
 
 async function out(name,data){try{if(DL)await DL.save({filename:name,data});else{const a=document.createElement('a');a.href=URL.createObjectURL(data instanceof Blob?data:new Blob([data]));a.download=name;a.click()}}catch(e){if(!e||e.code!='declined')msg('Could not save: '+((e&&e.message)||e))}}
@@ -331,6 +351,46 @@ async function act(x){const fn=(S.title||'score').replace(/[^\w-]+/g,'_');
  else if(x=='pat-delete'&&S.patterns.length>1){const pattern=P(),hasContent=Object.values(pattern.D).some(staves=>staves.some(measures=>measures.some(measure=>measure.length)))||Object.values(pattern.ch).some(chords=>Object.keys(chords).length)||Object.values(pattern.ink).some(strokes=>strokes.length);if(hasContent&&typeof window.confirm=='function'&&!window.confirm(`Delete "${pattern.name}" and its contents?`))return;push();const index=S.patterns.indexOf(pattern);S.patterns.splice(index,1);S.activePatternId=S.patterns[Math.max(0,index-1)].id;go()}
  else if(x=='pat-up'||x=='pat-down'){const index=S.patterns.indexOf(P()),target=index+(x=='pat-up'?-1:1);if(target<0||target>=S.patterns.length)return;push();[S.patterns[index],S.patterns[target]]=[S.patterns[target],S.patterns[index]];go()}
  else if(x=='add'){push();S.n++;go()}
+ else if(x=='duplicate-measure'){
+  const pattern=P(),source=pattern.cur,insert=source+1;push();
+  for(const staves of Object.values(pattern.D))for(const measures of staves)measures.splice(insert,0,JSON.parse(JSON.stringify(measures[source])));
+  for(const mode of Object.keys(pattern.ch)){
+   const remapped={};
+   for(const[key,value]of Object.entries(pattern.ch[mode])){
+    const match=key.match(/^(\d+):(.*)$/);
+    if(!match){remapped[key]=value;continue}
+    const index=Number(match[1]),position=match[2],next=index>=insert?index+1:index;
+    remapped[`${next}:${position}`]=value;
+    if(index===source)remapped[`${insert}:${position}`]=value;
+   }
+   pattern.ch[mode]=remapped;
+  }
+  for(const strokes of Object.values(pattern.ink)){
+   const copies=strokes.filter(stroke=>stroke.m===source).map(stroke=>JSON.parse(JSON.stringify(stroke)));
+   strokes.forEach(stroke=>{if(stroke.m>=insert)stroke.m++});
+   copies.forEach(stroke=>{stroke.m=insert});
+   strokes.push(...copies);
+  }
+  pattern.n++;pattern.cur=insert;go();
+ }
+ else if(x=='measure-earlier'||x=='measure-later'){
+  const pattern=P(),source=pattern.cur,target=source+(x=='measure-earlier'?-1:1);
+  if(target<0||target>=pattern.n)return;
+  push();
+  for(const staves of Object.values(pattern.D))for(const measures of staves)[measures[source],measures[target]]=[measures[target],measures[source]];
+  for(const mode of Object.keys(pattern.ch)){
+   const remapped={};
+   for(const[key,value]of Object.entries(pattern.ch[mode])){
+    const match=key.match(/^(\d+):(.*)$/);
+    if(!match){remapped[key]=value;continue}
+    const index=Number(match[1]),next=index===source?target:index===target?source:index;
+    remapped[`${next}:${match[2]}`]=value;
+   }
+   pattern.ch[mode]=remapped;
+  }
+  for(const strokes of Object.values(pattern.ink))strokes.forEach(stroke=>{if(stroke.m===source)stroke.m=target;else if(stroke.m===target)stroke.m=source});
+  pattern.cur=target;go();
+ }
  else if(x=='del'&&S.n>1){push();S.n--;S.cur=Math.min(S.cur,S.n-1);for(const m in S.ch)for(const k in S.ch[m])if(+k.split(':')[0]>=S.n)delete S.ch[m][k];for(const m in S.ink)S.ink[m]=S.ink[m].filter(t=>t.m<S.n);go()}
  else if(x=='undo'&&hist.length){S=JSON.parse(hist.pop());go()}
  else if(x=='clr'){push();S.D[S.mode]=S.D[S.mode].map(()=>[]);S.ch[S.mode]={};S.ink[S.mode]=[];go()}
