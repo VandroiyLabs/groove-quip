@@ -64,6 +64,8 @@ Priority: **P0** = required for the prototype, **P1** = next, **P2** = later.
 - **FR-DRUM-3 (P0)** The kit is extensible: the user can **add and remove parts**. Available parts and their staff positions: hi-hat (above top line, x head), crash (ledger line above, x head), ride (top line, x head), tom (4th space), snare (3rd space), floor tom (2nd space), kick (1st space). Default kit: hi-hat, snare, kick.
 - **FR-DRUM-4 (P0)** Cymbal parts use stems up; drums use stems down; beams join hits within each beat. The grid records hit onsets, and the staff derives note values from the gap to the next onset in the same stem group, or to the beat boundary for the last onset in a beat. For example, hits at steps 1 and 4 in the same beat render as a dotted eighth followed by a sixteenth. The grid itself remains a 16-step onset editor; it has no separate duration selector.
 - **FR-DRUM-5 (P1)** Accents (tap again, as in the reference app), open hi-hat, other percussion, triplet and non-16th grids, per-measure copy.
+- **FR-DRUM-6 (P0)** A **Single voice** toggle renders all drum parts in one voice with shared onset-derived durations, stems and beams. It is off by default; the existing cymbal-up/drum-down voices remain available. In single-voice mode, **Beam above** is an optional setting that directs all stems and beams upward; it is off by default.
+- **FR-DRUM-7 (P0)** Drum hits support per-hit articulations: hi-hat taps cycle through normal, open, pedal, then off; snare taps cycle through normal, ghost, then off. Each articulation has a distinct grid and score symbol. Open hi-hat uses an x notehead enclosed by an oval. Pedal hi-hat uses an x notehead below the bottom staff line with an upward stem, like the reference drum notation.
 
 ### 4.4 Chord symbols (FR-CHORD)
 - **FR-CHORD-1 (P0)** Available in Melody and Piano, stored separately per mode. Drum mode has no chord-symbol tool in the approved design.
@@ -123,7 +125,8 @@ Link sharing is **not a priority for now**. Sharing requirements can be defined 
   - `accidental`: 1 sharp, -1 flat, 0 natural.
   - Durations: 16, 8, 4, 2, 1.
 - Drum hit: `[startUnit, 1, laneIndex]`; lanes are indexes into the kit table (see FR-DRUM-3). The duration value `1` marks a grid onset, not necessarily the engraved note value; the renderer derives that value as specified in FR-DRUM-4.
-- Score state: title, author, mode, page width, active pattern ID, ordered patterns (each with name, measure count, current measure, per-mode note data (melody: 1 staff; piano: 2 staves; drums: 1), per-mode chords keyed `"measure:unit"`, and per-mode pen strokes `{measure, points relative to the measure}`), kit, tab setting, zoom flag, and annotation visibility.
+- Drum hit: `[startUnit, 1, laneIndex, articulation?]`; lanes are indexes into the kit table (see FR-DRUM-3). The optional articulation is `open`, `pedal`, or `ghost`; an omitted value is a normal hit. The duration value `1` marks a grid onset, not necessarily the engraved note value; the renderer derives that value as specified in FR-DRUM-4.
+- Score state: title, author, mode, page width, active pattern ID, ordered patterns (each with name, measure count, current measure, per-mode note data (melody: 1 staff; piano: 2 staves; drums: 1), per-mode chords keyed `"measure:unit"`, and per-mode pen strokes `{measure, points relative to the measure}`), kit, drum single-voice setting and beam direction, tab setting, zoom flag, and annotation visibility.
 - Chords and pen strokes are stored per mode.
 
 ## 6. Non-functional requirements

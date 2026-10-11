@@ -107,6 +107,9 @@ function createApp(storedState = null) {
     documentListenerOptions(name) { return documentListenerOptions[name]; },
     clickAction(action) {
       documentListeners.click({target: {closest: () => ({dataset: {x: action}})}});
+    },
+    clickGrid(lane, step) {
+      documentListeners.click({target: {closest: () => ({dataset: {g: `${lane},${step}`}})}});
     }
   };
 }
@@ -382,11 +385,66 @@ test('drum sixteenths receive secondary beams while eighths remain single-beamed
   assert.equal((eighths.match(/stroke-width="3"/g) || []).length, 1);
 });
 
+test('single-voice drum notation shares durations and beams across parts', () => {
+  const app = createApp();
+  const svg = app.evaluate('drums([[0, 1, 0], [3, 1, 6]], 0, 40, 15, true)');
+
+  assert.match(svg, /<circle[^>]+r="1\.8"/);
+  assert.match(svg, /M8\.5 108L53\.5 108/);
+});
+
+test('single-voice drum notation can place stems and beams above the notes', () => {
+  const app = createApp();
+  const svg = app.evaluate('drums([[0, 1, 0], [3, 1, 6]], 0, 40, 15, true, true)');
+
+  assert.match(svg, /<circle[^>]+r="1\.8"/);
+  assert.match(svg, /M19\.5 6L64\.5 6/);
+});
+
+test('drum grid cycles hi-hat and snare articulations per hit', () => {
+  const app = createApp();
+  app.evaluate("S.mode = 'drm'; go()");
+
+  app.clickGrid(0, 0);
+  assert.equal(app.evaluate('S.D.drm[0][0][0].length'), 3);
+  app.clickGrid(0, 0);
+  assert.equal(app.evaluate('S.D.drm[0][0][0][3]'), 'open');
+  assert.match(app.evaluate('build(true).s'), /<ellipse cx="94" cy="133" rx="7" ry="6\.5" fill="none" stroke="#111" stroke-width="1\.2"\/>/);
+  assert.match(app.elements.get('g').innerHTML, /data-g="0,0" aria-label="Hi-hat step 1: Open hi-hat" title="Hi-hat step 1: Open hi-hat \(tap to cycle\)">o<\/button>/);
+  app.clickGrid(0, 0);
+  assert.equal(app.evaluate('S.D.drm[0][0][0][3]'), 'pedal');
+  assert.match(app.evaluate('build(true).s'), /M89\.5 188\.5L98\.5 197\.5/);
+  assert.match(app.evaluate('build(true).s'), /M99\.5 193L99\.5 160/);
+  assert.match(app.elements.get('g').innerHTML, /data-g="0,0" aria-label="Hi-hat step 1: Pedal hi-hat" title="Hi-hat step 1: Pedal hi-hat \(tap to cycle\)">x<\/button>/);
+  app.clickGrid(0, 0);
+  assert.equal(app.evaluate('S.D.drm[0][0].length'), 0);
+
+  app.clickGrid(4, 1);
+  app.clickGrid(4, 1);
+  assert.equal(app.evaluate('S.D.drm[0][0][0][3]'), 'ghost');
+  assert.match(app.evaluate('build(true).s'), /font-size="14">\(<\/text>/);
+  app.clickGrid(4, 1);
+  assert.equal(app.evaluate('S.D.drm[0][0].length'), 0);
+});
+
 test('drum input selector sits above the grid and switches between grid and pen', () => {
   const app = createApp();
   app.evaluate("S.mode = 'drm'; go()");
+  app.evaluate('S.D.drm[0][0].push([0, 1, 0], [3, 1, 6]); go()');
   assert.doesNotMatch(app.elements.get('tabs').innerHTML, /dinput-/);
-  assert.match(app.elements.get('g').innerHTML, /^<div class="r drum-input-toggle">.*data-x="dinput-grid"[^>]*>Grid<\/button>.*data-x="dinput-pen"[^>]*>Pen<\/button>/);
+  assert.match(app.elements.get('g').innerHTML, /^<div class="r drum-input-toggle">.*data-x="dinput-grid"[^>]*>Grid<\/button>.*data-x="dinput-pen"[^>]*>Pen<\/button>.*data-x="drum-voice"[^>]*aria-pressed="false">Single voice<\/button>/);
+  assert.doesNotMatch(app.evaluate('build(true).s'), /r="1\.8"/);
+
+  app.clickAction('drum-voice');
+  assert.equal(app.evaluate('S.drumSingleVoice'), true);
+  assert.match(app.elements.get('g').innerHTML, /data-x="drum-voice"[^>]*aria-pressed="true">Single voice<\/button>/);
+  assert.match(app.elements.get('g').innerHTML, /data-x="drum-beam"[^>]*aria-pressed="false">Beam above<\/button>/);
+  assert.match(app.evaluate('build(true).s'), /r="1\.8"/);
+
+  app.clickAction('drum-beam');
+  assert.equal(app.evaluate('S.drumSingleVoiceUp'), true);
+  assert.match(app.elements.get('g').innerHTML, /data-x="drum-beam"[^>]*aria-pressed="true">Beam above<\/button>/);
+  assert.match(app.evaluate('build(true).s'), /L195\.125 104/);
 
   app.clickAction('dinput-pen');
   assert.equal(app.evaluate('S.dinput'), 'pen');

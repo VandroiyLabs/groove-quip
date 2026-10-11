@@ -7,11 +7,14 @@ const pageWidthValue=value=>{const width=Number(value);return Number.isFinite(wi
 const normalizePageWidth=score=>{score.pageWidth=pageWidthValue(score.pageWidth)};
 const LN=[['Hi-hat',9,1,1],['Crash',10,1,1],['Ride',8,1,1],['Tom',7,0,0],['Snare',5,0,0],['Floor tom',3,0,0],['Kick',1,0,0]];
 const TUN={g:{o:[-8,-3,2,7,11,16]},b:{o:[-20,-15,-10,-5]}};
+const DRUM_ARTICULATIONS={0:['open','pedal'],4:['ghost']};
+const DRUM_ARTICULATION_LABELS={normal:'Normal',open:'Open hi-hat',pedal:'Pedal hi-hat',ghost:'Ghost note'};
+const DRUM_ARTICULATION_SYMBOLS={open:'o',pedal:'x',ghost:'g'};
 const HINT={mel:'Tap the staff to place a note at the chosen length. Tap a note again to remove it.',pia:'Tap either staff. Notes of the same length at the same spot stack into chords.',drm:'Tap circles to place hits. Use ‹ › or tap a measure above to switch measures.'};
 const TH={c:'Type a chord, then tap where it starts. Tap the same spot with the same chord to remove it.',d:'Draw with a stylus. To scroll while drawing, use a finger outside the score.',e:'Tap a pen mark to erase it.',r:'Tap to place a rest at the chosen length.'};
 const makeData=n=>({mel:[Array.from({length:n},()=>[])],pia:[Array.from({length:n},()=>[]),Array.from({length:n},()=>[])],drm:[Array.from({length:n},()=>[])]});
 const makePattern=(id,name,n=2)=>({id,name,n,cur:0,D:makeData(n),ch:{},ink:{}});
-const fresh=()=>({title:'Untitled',author:'',pageWidth:DEFAULT_PAGE_WIDTH,mode:'mel',activePatternId:1,nextPatternId:2,patterns:[makePattern(1,'Pattern 1')],d:4,acc:0,tool:'n',dinput:'grid',showInk:true,cv:'C',z:0,tab:'',kit:[0,4,6]});
+const fresh=()=>({title:'Untitled',author:'',pageWidth:DEFAULT_PAGE_WIDTH,mode:'mel',activePatternId:1,nextPatternId:2,patterns:[makePattern(1,'Pattern 1')],d:4,acc:0,tool:'n',dinput:'grid',drumSingleVoice:false,drumSingleVoiceUp:false,showInk:true,cv:'C',z:0,tab:'',kit:[0,4,6]});
 let S,G={},hist=[],DL=null;
 try{S=JSON.parse(localStorage.getItem('ns1'))}catch(e){}
 if(!S||(!S.D&&!Array.isArray(S.patterns)))S=fresh();
@@ -33,7 +36,7 @@ const normalizeScore=score=>{
   for(const key in pattern.ch)if(typeof pattern.ch[key]=='string'){(pattern.ch.mel=pattern.ch.mel||{})[key]=pattern.ch[key];delete pattern.ch[key]}
  });
  if(!score.kit){score.kit=[0,4,6];score.patterns.forEach(pattern=>(pattern.D.drm[0]||[]).forEach(measure=>measure.forEach(event=>event[2]=[0,4,6][event[2]])))}
- score.mode=score.mode||'mel';score.activePatternId=score.patterns.some(pattern=>pattern.id===Number(score.activePatternId))?Number(score.activePatternId):score.patterns[0].id;
+ score.mode=score.mode||'mel';score.drumSingleVoice=score.drumSingleVoice===true;score.drumSingleVoiceUp=score.drumSingleVoiceUp===true;score.activePatternId=score.patterns.some(pattern=>pattern.id===Number(score.activePatternId))?Number(score.activePatternId):score.patterns[0].id;
  score.nextPatternId=Math.max(1,...score.patterns.map(pattern=>pattern.id))+1;
  normalizePageWidth(score);score.tab=score.tab||'';score.z=score.z||0;score.dinput=score.dinput||'grid';score.showInk=score.showInk!==false;
 };
@@ -84,24 +87,26 @@ function rest(x,y0,d){return d==16?`<rect x="${x}" y="${y0+10}" width="14" heigh
  d==4?`<path d="M${x+2} ${y0+9}l8 8-8 8 8 8" stroke="#111" stroke-width="2.4" fill="none"/>`:
  `<path d="M${x+9} ${y0+14}L${x+2} ${y0+30}" stroke="#111" stroke-width="1.6"/><circle cx="${x+9}" cy="${y0+14}" r="3"/>`+(d==1?`<circle cx="${x+7}" cy="${y0+22}" r="3"/>`:'')}
 
-function drums(ev,mx,y0,uw){let s='';const X=u=>mx+14+u*uw,durations={};
- [1,0].forEach(v=>{const us=[...new Set(ev.filter(e=>LN[e[2]][3]==v).map(e=>e[0]))].sort((a,b)=>a-b);
+function drums(ev,mx,y0,uw,singleVoice=false,singleVoiceUp=false){let s='';const X=u=>mx+14+u*uw,durations={},voice=l=>singleVoice?0:LN[l][3],voices=singleVoice?[0]:[1,0];
+ voices.forEach(v=>{const us=[...new Set(ev.filter(e=>voice(e[2])==v).map(e=>e[0]))].sort((a,b)=>a-b);
    for(let bt=0;bt<4;bt++){const g=us.filter(u=>u>>2==bt);g.forEach((u,i)=>durations[v+':'+u]=(g[i+1]??(bt+1)*4)-u)}});
- ev.forEach(([u,,l])=>{const[,m,xh,up]=LN[l],x=X(u),y=y0+40-m*5,d=durations[up+':'+u];
-   if(m>=10)s+=ln(x-9,y,x+9,y);
-   s+=xh?ln(x-4.5,y-4.5,x+4.5,y+4.5,1.6)+ln(x-4.5,y+4.5,x+4.5,y-4.5,1.6):`<ellipse cx="${x}" cy="${y}" rx="6" ry="4.5" transform="rotate(-20 ${x} ${y})"/>`;
-   if(d==3)s+=`<circle cx="${x+10}" cy="${y-4}" r="1.8" fill="#111"/>`;
-   const sx=x+(up?5.5:-5.5);s+=ln(sx,y,sx,up?y0-34:y0+68,1.1)});
- [1,0].forEach(v=>{const us=[...new Set(ev.filter(e=>LN[e[2]][3]==v).map(e=>e[0]))].sort((a,b)=>a-b);
+ ev.forEach(([u,,l,articulation])=>{const[,m,xh,laneUp]=LN[l],up=singleVoice?(singleVoiceUp?1:0):laneUp,x=X(u),y=y0+40-m*5,noteY=articulation=='pedal'?y0+55:y,d=durations[voice(l)+':'+u],beatUnits=[...new Set(ev.filter(e=>voice(e[2])==voice(l)&&(e[0]>>2)==(u>>2)).map(e=>e[0]))],pedalOnly=beatUnits.length==1&&ev.some(e=>e[0]==u&&voice(e[2])==voice(l)&&e[3]=='pedal'),stemEnd=pedalOnly?(up?y0+22:y0+88):(up?y0-34:y0+68);
+   if(m>=10)s+=ln(x-9,noteY,x+9,noteY);
+   s+=xh?ln(x-4.5,noteY-4.5,x+4.5,noteY+4.5,1.6)+ln(x-4.5,noteY+4.5,x+4.5,noteY-4.5,1.6):`<ellipse cx="${x}" cy="${noteY}" rx="6" ry="4.5" transform="rotate(-20 ${x} ${noteY})"/>`;
+  if(articulation=='open')s+=`<ellipse cx="${x}" cy="${noteY}" rx="7" ry="6.5" fill="none" stroke="#111" stroke-width="1.2"/>`;
+   if(articulation=='ghost')s+=`<text x="${x-10}" y="${y+4}" text-anchor="middle" font-size="14">(</text><text x="${x+10}" y="${y+4}" text-anchor="middle" font-size="14">)</text>`;
+   if(d==3)s+=`<circle cx="${x+10}" cy="${noteY-4}" r="1.8" fill="#111"/>`;
+   const sx=x+(up?5.5:-5.5);s+=ln(sx,noteY,sx,stemEnd,1.1)});
+ voices.forEach(v=>{const us=[...new Set(ev.filter(e=>voice(e[2])==v).map(e=>e[0]))].sort((a,b)=>a-b);
    for(let bt=0;bt<4;bt++){const g=us.filter(u=>u>>2==bt);if(!g.length)continue;
-    const ey=v?y0-34:y0+68,off=v?5.5:-5.5,ds=g.map((u,i)=>(g[i+1]??(bt+1)*4)-u);
+    const up=singleVoice?singleVoiceUp:v,pedalOnly=g.length==1&&ev.some(e=>e[0]==g[0]&&voice(e[2])==v&&e[3]=='pedal'),ey=pedalOnly?(up?y0+22:y0+88):(up?y0-34:y0+68),off=up?5.5:-5.5,ds=g.map((u,i)=>(g[i+1]??(bt+1)*4)-u);
     if(g.length>1){s+=ln(X(g[0])+off,ey,X(g[g.length-1])+off,ey,3);
       const linked=new Set();
-      for(let i=0;i<g.length-1;i++)if(g[i+1]===g[i]+1){const by=ey+(v?5:-5);s+=ln(X(g[i])+off,by,X(g[i+1])+off,by,3);linked.add(i);linked.add(i+1)}
-      ds.forEach((d,i)=>{if(d!=1||linked.has(i))return;const left=i==g.length-1||g[i+1]-g[i]>1,ex=X(g[i])+off+(left?-10:10),by=ey+(v?5:-5);s+=ln(left?ex:X(g[i])+off,by,left?X(g[i])+off:ex,by,3)})
+      for(let i=0;i<g.length-1;i++)if(g[i+1]===g[i]+1){const by=ey+(up?5:-5);s+=ln(X(g[i])+off,by,X(g[i+1])+off,by,3);linked.add(i);linked.add(i+1)}
+      ds.forEach((d,i)=>{if(d!=1||linked.has(i))return;const left=i==g.length-1||g[i+1]-g[i]>1,ex=X(g[i])+off+(left?-10:10),by=ey+(up?5:-5);s+=ln(left?ex:X(g[i])+off,by,left?X(g[i])+off:ex,by,3)})
     }else{const sx=X(g[0])+off,count=ds[0]==1?2:ds[0]<4?1:0;
-      for(let i=1;i<=count;i++){const by=ey+(v?5:-5)*(i-1),ex=sx+(v?10:-10);s+=ln(v?sx:ex,by,v?ex:sx,by,3)}}
-   }});
+      for(let i=1;i<=count;i++){const by=ey+(up?5:-5)*(i-1),ex=sx+(up?10:-10);s+=ln(up?sx:ex,by,up?ex:sx,by,3)}
+    }}});
  return s}
 
 function build(ex){
@@ -122,7 +127,7 @@ function build(ex){
   row+=`<text x="68" y="${Y(k)+18}" font-size="22" font-weight="700" text-anchor="middle">4</text><text x="68" y="${Y(k)+38}" font-size="22" font-weight="700" text-anchor="middle">4</text>`;
   for(let j=0;j<count;j++){const mi=base+j,mx=80+j*mw;
    row+=ln(mx+mw,Y(k),mx+mw,Y(k)+40,mi==pattern.n-1?3:1);
-   if(S.mode=='drm'){if(!ex&&pattern.id===S.activePatternId&&mi===pattern.cur)row+=`<rect x="${mx}" y="${Y(0)-38}" width="${mw}" height="112" fill="#3b82f6" opacity=".1"/>`;row+=drums(pattern.D.drm[0][mi],mx,Y(0),uw)}
+    if(S.mode=='drm'){if(!ex&&pattern.id===S.activePatternId&&mi===pattern.cur)row+=`<rect x="${mx}" y="${Y(0)-38}" width="${mw}" height="112" fill="#3b82f6" opacity=".1"/>`;row+=drums(pattern.D.drm[0][mi],mx,Y(0),uw,S.drumSingleVoice,S.drumSingleVoiceUp)}
     else{const ev=pattern.D[S.mode][k][mi],beam=beamNotes(ev,mx,uw,b,Y(k));ev.forEach(e=>{row+=e[2]==null?rest(e[1]==16?mx+mw/2-7:mx+8+e[0]*uw,Y(k),e[1]):note(mx+14+e[0]*uw,Y(k),b,e,beam.events.has(e))});row+=beam.svg;
     rests(ev).forEach(([u,d])=>row+=rest(d==16?mx+mw/2-7:mx+8+u*uw,Y(k),d))}}});
   if(tb){const t=Y(1);for(let i=0;i<NT;i++)row+=ln(20,t+i*10,xe,t+i*10,.8);
@@ -160,10 +165,17 @@ function ui(){
   +`<button data-x="zoom" class="${S.z?'on':''}">Zoom: ${S.z?'measure':'all'}</button>`
   +`<button data-x="ink">${S.showInk?'Hide':'Show'} annotations</button>`;
  const ev=S.D.drm[0][S.cur]||[],free=LN.map((l,i)=>i).filter(i=>!S.kit.includes(i));
- $('#g').innerHTML=dr?`<div class="r drum-input-toggle"><button data-x="dinput-grid" class="${S.dinput=='grid'?'on':''}">Grid</button><button data-x="dinput-pen" class="${S.dinput=='pen'?'on':''}">Pen</button></div>`
-  +(S.dinput=='grid'?`<div class="r drum-grid-nav" style="padding:0 0 6px"><span style="color:var(--mu);font-size:13px">Measure ${S.cur+1} of ${S.n}</span><button data-x="prev">‹</button><button data-x="next">›</button>`
-   +(free.length?`<select id="ap">${free.map(i=>`<option value="${i}">${LN[i][0]}</option>`).join('')}</select><button data-x="addk">+ Add to kit</button>`:'')+'</div>'
-   +S.kit.map(l=>`<div class="gr"><b>${LN[l][0]}<button data-k="${l}" style="min-height:0;padding:0 6px;background:none;color:var(--mu)">×</button></b>`+Array.from({length:16},(_,u)=>`<button class="c${u&&u%4==0?' q':''}${ev.some(q=>q[0]==u&&q[2]==l)?' on':''}" data-g="${l},${u}"></button>`).join('')+'</div>').join(''):''):'';
+ const gridRows=S.kit.map(l=>{
+  const cells=Array.from({length:16},(_,u)=>{
+   const hit=ev.find(q=>q[0]==u&&q[2]==l),articulation=hit?.[3]||'normal',symbol=DRUM_ARTICULATION_SYMBOLS[articulation]||'',label=DRUM_ARTICULATION_LABELS[articulation]||'Normal';
+   return `<button class="c${u&&u%4==0?' q':''}${hit?' on':''}" data-g="${l},${u}" aria-label="${LN[l][0]} step ${u+1}: ${label}" title="${LN[l][0]} step ${u+1}: ${label} (tap to cycle)">${symbol}</button>`
+  }).join('');
+  return `<div class="gr"><b>${LN[l][0]}<button data-k="${l}" style="min-height:0;padding:0 6px;background:none;color:var(--mu)">×</button></b>${cells}</div>`
+ }).join('');
+ const gridNavigation=`<div class="r drum-grid-nav" style="padding:0 0 6px"><span style="color:var(--mu);font-size:13px">Measure ${S.cur+1} of ${S.n}</span><button data-x="prev">‹</button><button data-x="next">›</button>${free.length?`<select id="ap">${free.map(i=>`<option value="${i}">${LN[i][0]}</option>`).join('')}</select><button data-x="addk">+ Add to kit</button>`:''}</div>${gridRows}`;
+ $('#g').innerHTML=dr
+  ? `<div class="r drum-input-toggle"><button data-x="dinput-grid" class="${S.dinput=='grid'?'on':''}">Grid</button><button data-x="dinput-pen" class="${S.dinput=='pen'?'on':''}">Pen</button><button data-x="drum-voice" class="${S.drumSingleVoice?'on':''}" aria-pressed="${S.drumSingleVoice}">Single voice</button>${S.drumSingleVoice?`<button data-x="drum-beam" class="${S.drumSingleVoiceUp?'on':''}" aria-pressed="${S.drumSingleVoiceUp}">Beam above</button>`:''}</div>${S.dinput=='grid'?gridNavigation:''}`
+  : '';
  msg(TH[S.tool]||HINT[S.mode])}
 
 const XY=e=>{const r=$('#sc svg').getBoundingClientRect(),k=G.W/r.width/G.scale;return[(e.clientX-r.left)*k,(e.clientY-r.top)*k]};
@@ -224,7 +236,7 @@ document.addEventListener('click',e=>{const b=e.target.closest('button');if(!b)r
  else if(D.k){push();const l=+D.k;S.kit=S.kit.filter(x=>x!=l);S.patterns.forEach(pattern=>pattern.D.drm[0]=pattern.D.drm[0].map(m=>m.filter(q=>q[2]!=l)));go()}
  else if(D.a!==undefined){S.acc=+D.a;go()}
  else if(D.t){S.tool=D.t;go()}
- else if(D.g){push();const[l,u]=D.g.split(',').map(Number),ev=S.D.drm[0][S.cur],i=ev.findIndex(q=>q[0]==u&&q[2]==l);if(i>=0)ev.splice(i,1);else ev.push([u,1,l]);go()}
+ else if(D.g){push();const[l,u]=D.g.split(',').map(Number),ev=S.D.drm[0][S.cur],i=ev.findIndex(q=>q[0]==u&&q[2]==l);if(i<0)ev.push([u,1,l]);else{const choices=DRUM_ARTICULATIONS[l]||[],next=choices[choices.indexOf(ev[i][3]||'normal')+1];if(next)ev[i][3]=next;else ev.splice(i,1)}go()}
  else if(D.x)act(D.x)});
 
 $('#ti').oninput=e=>{S.title=e.target.value;sv();draw()};
@@ -262,6 +274,8 @@ async function act(x){const fn=(S.title||'score').replace(/[^\w-]+/g,'_');
  else if(x=='ink'){S.showInk=!S.showInk;go()}
  else if(x=='dinput-grid'){S.dinput='grid';S.tool='n';go()}
  else if(x=='dinput-pen'){S.dinput='pen';S.tool='d';go()}
+ else if(x=='drum-voice'){S.drumSingleVoice=!S.drumSingleVoice;go()}
+ else if(x=='drum-beam'){S.drumSingleVoiceUp=!S.drumSingleVoiceUp;go()}
  else if(x=='tab'){S.tab=S.tab==''?'g':S.tab=='g'?'b':'';go()}
  else if(x=='addk'){push();S.kit.push(+$('#ap').value);S.kit.sort((a,b)=>a-b);go()}
  else if(x=='png'){const c=await cv();c.toBlob(b=>out(fn+'.png',b))}
