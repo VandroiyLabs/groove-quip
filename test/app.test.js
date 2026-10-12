@@ -379,6 +379,33 @@ test('pen strokes may start in the space above the staff', () => {
   assert.ok(app.evaluate('INK()[0].p[0][1] < 0'));
 });
 
+test('on-screen keyboard input renders note keys and octave controls', () => {
+  const app = createApp();
+
+  assert.equal(app.evaluate('S.tool'), 'k');
+  assert.match(app.elements.get('tl').innerHTML, /data-t="k" class="on">Keyboard/);
+  assert.match(app.elements.get('g').innerHTML, /data-note="C4"/);
+  assert.match(app.elements.get('g').innerHTML, />C4<\/button>/);
+  assert.match(app.elements.get('g').innerHTML, />D4<\/button>/);
+  assert.match(app.elements.get('g').innerHTML, />E4<\/button>/);
+  assert.match(app.elements.get('g').innerHTML, />E3<\/button>/);
+  assert.match(app.elements.get('g').innerHTML, />G5<\/button>/);
+  assert.equal((app.elements.get('g').innerHTML.match(/class="keyboard-key keyboard-white"/g) || []).length, 17);
+  assert.match(app.elements.get('g').innerHTML, /Octave 4/);
+});
+
+test('changing note duration preserves keyboard and pen tools', () => {
+  const app = createApp();
+  for (const tool of ['k', 'd']) {
+    app.evaluate(`S.tool='${tool}'; go();`);
+    app.dispatchDocument('click', {
+      target: {closest: () => ({dataset: {d: '2'}})}
+    });
+    assert.equal(app.evaluate('S.tool'), tool);
+    assert.equal(app.evaluate('S.d'), 2);
+  }
+});
+
 test('drum positions 1 and 4 render a dotted eighth followed by a sixteenth', () => {
   const app = createApp();
   const svg = app.evaluate('drums([[0, 1, 0], [3, 1, 0]], 0, 40, 15)');

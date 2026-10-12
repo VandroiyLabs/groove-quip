@@ -10,11 +10,13 @@ const TUN={g:{o:[-8,-3,2,7,11,16]},b:{o:[-20,-15,-10,-5]}};
 const DRUM_ARTICULATIONS={0:['open','pedal'],4:['ghost']};
 const DRUM_ARTICULATION_LABELS={normal:'Normal',open:'Open hi-hat',pedal:'Pedal hi-hat',ghost:'Ghost note'};
 const DRUM_ARTICULATION_SYMBOLS={open:'o',pedal:'x',ghost:'g'};
-const HINT={mel:'Tap the staff to place a note at the chosen length. Tap a note again to remove it.',pia:'Tap either staff. Notes of the same length at the same spot stack into chords.',drm:'Tap circles to place hits. Use ‹ › or tap a measure above to switch measures.'};
-const TH={c:'Type a chord, then tap where it starts. Tap the same spot with the same chord to remove it.',d:'Draw with a stylus. To scroll while drawing, use a finger outside the score.',e:'Tap a pen mark to erase it.',r:'Tap to place a rest at the chosen length.'};
+const HINT={mel:'Choose a duration, then select a keyboard key or tap the staff to place a note.',pia:'Choose a duration, then select a keyboard key or tap either staff to place notes and chords.',drm:'Tap circles to place hits. Use ‹ › or tap a measure above to switch measures.'};
+const KEYBOARD_WHITE=['C','D','E','F','G','A','B'];
+const KEYBOARD_BLACK={C:'C#',D:'D#',F:'F#',G:'G#',A:'A#'};
+const TH={c:'Type a chord, then tap where it starts. Tap the same spot with the same chord to remove it.',d:'Draw with a stylus. To scroll while drawing, use a finger outside the score.',e:'Tap a pen mark to erase it.',k:'Select a piano key to place a note at the current duration.',r:'Tap to place a rest at the chosen length.'};
 const makeData=n=>({mel:[Array.from({length:n},()=>[])],pia:[Array.from({length:n},()=>[]),Array.from({length:n},()=>[])],drm:[Array.from({length:n},()=>[])]});
 const makePattern=(id,name,n=2)=>({id,name,n,cur:0,D:makeData(n),ch:{},ink:{}});
-const fresh=()=>({title:'Untitled',author:'',pageWidth:DEFAULT_PAGE_WIDTH,mode:'mel',activePatternId:1,nextPatternId:2,patterns:[makePattern(1,'Pattern 1')],d:4,acc:0,tool:'n',dinput:'grid',drumSingleVoice:false,drumSingleVoiceUp:false,showInk:true,cv:'C',z:0,tab:'',kit:[0,4,6]});
+const fresh=()=>({title:'Untitled',author:'',pageWidth:DEFAULT_PAGE_WIDTH,mode:'mel',activePatternId:1,nextPatternId:2,patterns:[makePattern(1,'Pattern 1')],d:4,acc:0,tool:'k',dinput:'grid',drumSingleVoice:false,drumSingleVoiceUp:false,showInk:true,cv:'C',z:0,tab:'',kit:[0,4,6],keyboardOctave:4});
 let S,G={},hist=[],DL=null;
 try{S=JSON.parse(localStorage.getItem('ns1'))}catch(e){}
 if(!S||(!S.D&&!Array.isArray(S.patterns)))S=fresh();
@@ -38,7 +40,7 @@ const normalizeScore=score=>{
  if(!score.kit){score.kit=[0,4,6];score.patterns.forEach(pattern=>(pattern.D.drm[0]||[]).forEach(measure=>measure.forEach(event=>event[2]=[0,4,6][event[2]])))}
  score.mode=score.mode||'mel';score.drumSingleVoice=score.drumSingleVoice===true;score.drumSingleVoiceUp=score.drumSingleVoiceUp===true;score.activePatternId=score.patterns.some(pattern=>pattern.id===Number(score.activePatternId))?Number(score.activePatternId):score.patterns[0].id;
  score.nextPatternId=Math.max(1,...score.patterns.map(pattern=>pattern.id))+1;
- normalizePageWidth(score);score.tab=score.tab||'';score.z=score.z||0;score.dinput=score.dinput||'grid';score.showInk=score.showInk!==false;
+ normalizePageWidth(score);score.tab=score.tab||'';score.z=score.z||0;score.dinput=score.dinput||'grid';score.showInk=score.showInk!==false;score.keyboardOctave=Number.isFinite(Number(score.keyboardOctave))?Math.max(0,Math.min(9,Number(score.keyboardOctave))):4;
 };
 normalizeScore(S);
 const P=()=>S.patterns.find(pattern=>pattern.id===S.activePatternId)||S.patterns[0];
@@ -51,6 +53,67 @@ const pick=e=>{const c=cand(e);return c.find(q=>q[1]==e[4])||c[0]};
 (async()=>{try{DL=await window.claude?.use('downloads')}catch(e){}})();
 const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const ln=(a,b,c,d,w=1)=>`<path d="M${a} ${b}L${c} ${d}" stroke="#111" stroke-width="${w}"/>`;
+const keyboardNoteValue=(name,octave)=>{
+ const match=String(name).match(/^([A-G])(#|b)?$/);
+ if(!match)return 0;
+ const letter=match[1],acc=match[2]==='#'?1:match[2]==='b'?-1:0;
+ const step={C:0,D:1,E:2,F:3,G:4,A:5,B:6}[letter];
+ return step+(octave-4)*7+acc;
+};
+const keyboardNoteStep=(name)=>{
+ const match=String(name).match(/^([A-G])(#|b)?(\d+)$/);
+ if(!match)return 0;
+ const letter=match[1],acc=match[2]==='#'?1:match[2]==='b'?-1:0,octave=Number(match[3]);
+ return keyboardNoteValue(letter,octave)+acc;
+};
+const findKeyboardInsertPoint=(measure,duration)=>{
+ const slots=Array.from({length:16-duration+1},(_,start)=>start);
+ return slots.find(start=>!measure.some(([u,len])=>!(u+len<=start||start+duration<=u))) ?? Math.max(0,16-duration);
+};
+function addKeyboardNote(noteName,octave){
+ const andAccidental=String(noteName).match(/^([A-G])(#|b)?(\d+)$/);
+ if(!andAccidental)return;
+ const letter=andAccidental[1],acc=andAccidental[2]==='#'?1:andAccidental[2]==='b'?-1:0,octaveValue=Number(andAccidental[3]);
+ const staffIndex=S.mode==='pia'?(keyboardNoteValue(letter,octaveValue)<0?1:0):0;
+ const base=MODES[S.mode][1][staffIndex];
+ const n=base+keyboardNoteValue(letter,octaveValue);
+ const measureIndex=P().cur;
+ const duration=S.d;
+ const insertAt=findKeyboardInsertPoint(S.D[S.mode][staffIndex][measureIndex],duration);
+ push();
+ const events=S.D[S.mode][staffIndex][measureIndex];
+ const index=events.findIndex(q=>q[0]===insertAt&&q[1]===duration&&q[2]===n&&q[3]===acc);
+ if(index>=0)events.splice(index,1);
+ else{
+  const filtered=events.filter(q=>!(q[0]<insertAt+duration&&insertAt<q[0]+q[1])||(q[0]===insertAt&&q[1]===duration&&q[2]!=null&&n!=null));
+  filtered.push([insertAt,duration,n,acc]);
+  S.D[S.mode][staffIndex][measureIndex]=filtered;
+ }
+ go();
+}
+function renderKeyboardPanel(){
+ const firstWhite=S.keyboardOctave*7-5,whiteCount=17;
+ const whiteWidth=28,whiteHeight=144,width=whiteCount*whiteWidth+20;
+ const whiteKeys=[];const blackKeys=[];
+ for(let index=0;index<whiteCount;index++){
+  const noteIndex=firstWhite+index,octave=Math.floor(noteIndex/7),letter=KEYBOARD_WHITE[((noteIndex%7)+7)%7],x=index*whiteWidth;
+  whiteKeys.push(`<button type="button" data-note="${letter}${octave}" data-octave="${octave}" aria-label="${letter}${octave}" class="keyboard-key keyboard-white" style="left:${x}px;width:${whiteWidth}px;height:${whiteHeight}px">${letter}${octave}</button>`);
+  if(Object.hasOwn(KEYBOARD_BLACK,letter)){
+  const blackName=KEYBOARD_BLACK[letter];
+  blackKeys.push(`<button type="button" data-note="${blackName}${octave}" data-octave="${octave}" aria-label="${blackName}${octave}" class="keyboard-key keyboard-black" style="left:${x+whiteWidth*0.68}px;width:${whiteWidth*0.68}px;height:${whiteHeight*0.56}px">${blackName}</button>`);
+  }
+ }
+ return `<div class="keyboard-shell">
+  <div class="r keyboard-controls">
+   <button type="button" data-keyboard-nav="prev">◀ Octave</button>
+   <span class="keyboard-octave">Octave ${S.keyboardOctave}</span>
+   <button type="button" data-keyboard-nav="next">Octave ▶</button>
+  </div>
+  <div class="keyboard-frame" style="width:${width}px">
+   <div class="keyboard-surface" style="width:${width}px;height:${whiteHeight+12}px">${whiteKeys.join('')}${blackKeys.join('')}</div>
+  </div>
+ </div>`;
+}
 const fit=()=>S.patterns.forEach(pattern=>{for(const k in pattern.D)pattern.D[k].forEach(st=>{while(st.length<pattern.n)st.push([]);st.length=pattern.n})});
 const sv=()=>{try{localStorage.setItem('ns1',JSON.stringify(S))}catch(e){}};
 const push=()=>{hist.push(JSON.stringify(S));if(hist.length>40)hist.shift()};
@@ -158,8 +221,9 @@ function ui(){
  $('#patternName').oninput=e=>{P().name=e.target.value;sv();draw();const option=$('#patternSelect').selectedOptions[0];if(option)option.textContent=`${currentIndex+1}. ${P().name}`};
  $('#pageWidth').value=S.pageWidth??'';
  const dr=S.mode=='drm',md=S.tool=='n'||S.tool=='r';
- $('#pal').innerHTML=dr?'':DUR.map(([d,n])=>`<button data-d="${d}" class="${S.d==d&&md?'on':''}">${n}</button>`).join('')+[[0,'♮'],[1,'♯'],[-1,'♭']].map(([a,t])=>`<button data-a="${a}" class="${S.acc==a?'on':''}">${t}</button>`).join('');
- $('#tl').innerHTML=(dr?(S.dinput=='pen'?`<button data-t="e" class="${S.tool=='e'?'on':''}">Erase pen</button>`:''):[['n','Notes'],['r','Rest'],['c','Chords'],['d','Pen'],['e','Erase pen']].map(([t,n])=>`<button data-t="${t}" class="${S.tool==t?'on':''}">${n}</button>`).join(''))
+ const keyboardMode=S.tool=='k'&&S.mode!='drm';
+ $('#pal').innerHTML=dr?'':DUR.map(([d,n])=>`<button data-d="${d}" class="${S.d==d&&(md||keyboardMode)?'on':''}">${n}</button>`).join('')+[[0,'♮'],[1,'♯'],[-1,'♭']].map(([a,t])=>`<button data-a="${a}" class="${S.acc==a?'on':''}">${t}</button>`).join('');
+ $('#tl').innerHTML=(dr?(S.dinput=='pen'?`<button data-t="e" class="${S.tool=='e'?'on':''}">Erase pen</button>`:''):[['n','Notes'],['r','Rest'],['k','Keyboard'],['c','Chords'],['d','Pen'],['e','Erase pen']].map(([t,n])=>`<button data-t="${t}" class="${S.tool==t?'on':''}">${n}</button>`).join(''))
   +(S.tool=='c'?`<input id="chord" value="${esc(S.cv||'')}" placeholder="Chord" oninput="S.cv=this.value;sv()" style="max-width:110px;min-width:80px">`:'')
   +(S.mode=='mel'?`<button data-x="tab">Tab: ${{'':'off',g:'guitar',b:'bass'}[S.tab]}</button>`:'')
   +`<button data-x="zoom" class="${S.z?'on':''}">Zoom: ${S.z?'measure':'all'}</button>`
@@ -175,7 +239,7 @@ function ui(){
  const gridNavigation=`<div class="r drum-grid-nav" style="padding:0 0 6px"><span style="color:var(--mu);font-size:13px">Measure ${S.cur+1} of ${S.n}</span><button data-x="prev">‹</button><button data-x="next">›</button>${free.length?`<select id="ap">${free.map(i=>`<option value="${i}">${LN[i][0]}</option>`).join('')}</select><button data-x="addk">+ Add to kit</button>`:''}</div>${gridRows}`;
  $('#g').innerHTML=dr
   ? `<div class="r drum-input-toggle"><button data-x="dinput-grid" class="${S.dinput=='grid'?'on':''}">Grid</button><button data-x="dinput-pen" class="${S.dinput=='pen'?'on':''}">Pen</button><button data-x="drum-voice" class="${S.drumSingleVoice?'on':''}" aria-pressed="${S.drumSingleVoice}">Single voice</button>${S.drumSingleVoice?`<button data-x="drum-beam" class="${S.drumSingleVoiceUp?'on':''}" aria-pressed="${S.drumSingleVoiceUp}">Beam above</button>`:''}</div>${S.dinput=='grid'?gridNavigation:''}`
-  : '';
+ : (S.tool=='k'&&S.mode!='drm'?renderKeyboardPanel():'');
  msg(TH[S.tool]||HINT[S.mode])}
 
 const XY=e=>{const r=$('#sc svg').getBoundingClientRect(),k=G.W/r.width/G.scale;return[(e.clientX-r.left)*k,(e.clientY-r.top)*k]};
@@ -231,8 +295,10 @@ document.addEventListener('touchmove',e=>{if(S.tool=='d'&&e.cancelable)e.prevent
 addEventListener('resize',draw);
 
 document.addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;const D=b.dataset;
+ if(D['keyboardNav']){act(`keyboard-${D['keyboardNav']}`);return;}
+ if(D.note&&S.tool=='k'){addKeyboardNote(D.note,Number(D.octave));return;}
  if(D.m){S.mode=D.m;S.cur=Math.min(S.cur,S.n-1);go()}
- else if(D.d){S.d=+D.d;if(S.tool!='r')S.tool='n';go()}
+ else if(D.d){S.d=+D.d;if(!['r','k','d'].includes(S.tool))S.tool='n';go()}
  else if(D.k){push();const l=+D.k;S.kit=S.kit.filter(x=>x!=l);S.patterns.forEach(pattern=>pattern.D.drm[0]=pattern.D.drm[0].map(m=>m.filter(q=>q[2]!=l)));go()}
  else if(D.a!==undefined){S.acc=+D.a;go()}
  else if(D.t){S.tool=D.t;go()}
@@ -270,6 +336,8 @@ async function act(x){const fn=(S.title||'score').replace(/[^\w-]+/g,'_');
  else if(x=='clr'){push();S.D[S.mode]=S.D[S.mode].map(()=>[]);S.ch[S.mode]={};S.ink[S.mode]=[];go()}
  else if(x=='prev'){S.cur=Math.max(0,S.cur-1);go()}
  else if(x=='next'){S.cur=Math.min(S.n-1,S.cur+1);go()}
+ else if(x=='keyboard-prev'){S.keyboardOctave=Math.max(0,S.keyboardOctave-1);go()}
+ else if(x=='keyboard-next'){S.keyboardOctave=Math.min(9,S.keyboardOctave+1);go()}
  else if(x=='zoom'){S.z=S.z?0:1;go()}
  else if(x=='ink'){S.showInk=!S.showInk;go()}
  else if(x=='dinput-grid'){S.dinput='grid';S.tool='n';go()}
