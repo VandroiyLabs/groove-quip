@@ -199,6 +199,15 @@ test('pitched eighth and sixteenth notes beam together within a beat', () => {
   assert.doesNotMatch(svg, /c0 8 9 10 7 20/);
 });
 
+test('a sixteenth followed by an eighth in the same beat does not add a second beam to the eighth', () => {
+  const app = createApp();
+  app.evaluate("S.mode='drm'; S.tool='n'; S.patterns[0].D.drm[0][0] = [[1, 1, 4], [2, 1, 4]];");
+  const svg = app.evaluate('build(true).s');
+
+  assert.match(svg, /M120\.375 206L152\.25 206/);
+  assert.doesNotMatch(svg, /M120\.375 201L152\.25 201/);
+});
+
 test('legacy scores migrate into one named pattern without losing score data', () => {
   const legacy = {
     title: 'Old score',

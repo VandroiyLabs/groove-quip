@@ -102,7 +102,7 @@ function drums(ev,mx,y0,uw,singleVoice=false,singleVoiceUp=false){let s='';const
     const up=singleVoice?singleVoiceUp:v,pedalOnly=g.length==1&&ev.some(e=>e[0]==g[0]&&voice(e[2])==v&&e[3]=='pedal'),ey=pedalOnly?(up?y0+22:y0+88):(up?y0-34:y0+68),off=up?5.5:-5.5,ds=g.map((u,i)=>(g[i+1]??(bt+1)*4)-u);
     if(g.length>1){s+=ln(X(g[0])+off,ey,X(g[g.length-1])+off,ey,3);
       const linked=new Set();
-      for(let i=0;i<g.length-1;i++)if(g[i+1]===g[i]+1){const by=ey+(up?5:-5);s+=ln(X(g[i])+off,by,X(g[i+1])+off,by,3);linked.add(i);linked.add(i+1)}
+      for(let i=0;i<g.length-1;i++)if(g[i+1]===g[i]+1&&ds[i]===1&&ds[i+1]===1){const by=ey+(up?5:-5);s+=ln(X(g[i])+off,by,X(g[i+1])+off,by,3);linked.add(i);linked.add(i+1)}
       ds.forEach((d,i)=>{if(d!=1||linked.has(i))return;const left=i==g.length-1||g[i+1]-g[i]>1,ex=X(g[i])+off+(left?-10:10),by=ey+(up?5:-5);s+=ln(left?ex:X(g[i])+off,by,left?X(g[i])+off:ex,by,3)})
     }else{const sx=X(g[0])+off,count=ds[0]==1?2:ds[0]<4?1:0;
       for(let i=1;i<=count;i++){const by=ey+(up?5:-5)*(i-1),ex=sx+(up?10:-10);s+=ln(up?sx:ex,by,up?ex:sx,by,3)}
